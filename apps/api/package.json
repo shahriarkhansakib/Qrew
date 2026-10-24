@@ -20,7 +20,7 @@
     "@starter/db": "workspace:*",
     "@upstash/redis": "^1.39.0",
     "better-auth": "^1.2.7",
-    "dotenv": "^16.6.1",
+    "dotenv": "^18.0.9",
     "drizzle-orm": "^0.39.3",
     "hono": "^4.12.16",
     "ioredis": "^5.4.2",
@@ -37,7 +37,7 @@
     "@types/nodemailer": "^8.0.0",
     "@types/uuid": "^10.0.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "tsx": "^4.19.3",
+    "tsx": "^4.23.15",
     "typescript": "^5.4.5",
     "vitest": "^4.1.8"
   }
