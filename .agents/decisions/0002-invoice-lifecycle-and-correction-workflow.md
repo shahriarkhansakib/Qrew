@@ -51,9 +51,9 @@ stateDiagram-v2
 
 1. **`draft`**: Working workspace. Multiple team members can collaborate, edit line items, and adjust formulas.
 2. **`frozen`**: Finalized state. The document number is atomically locked from sequence, and 3 immutable JSONB artifacts are snapshot:
-   * `historicalFormat`: Evaluated sections, rows, charges, and display labels.
-   * `resolvedScope`: Full dictionary of all resolved tokens and external values.
-   * `resolvedHeaderValues`: Point-in-time snapshot of entity header fields.
+   - `historicalFormat`: Evaluated sections, rows, charges, and display labels.
+   - `resolvedScope`: Full dictionary of all resolved tokens and external values.
+   - `resolvedHeaderValues`: Point-in-time snapshot of entity header fields.
 3. **`issued`**: Sent to the client. Legally outstanding receivable.
 4. **`disputed`**: Client contests one or more line items. Automated dunning, reminders, and late fees are halted, but the document sequence and legal audit trail remain intact.
 5. **`paid`**: Terminal settled state. Cannot be edited, reverted, or corrected. Only allowable transition is `void` under exceptional conditions.
@@ -61,8 +61,8 @@ stateDiagram-v2
 
 ### The Correction Workflow (`unfreezeInvoice`)
 
-* **Eligibility**: Permitted from `frozen`, `issued`, and `disputed`. Strictly forbidden from `paid` or `void`.
-* **Behavior**:
+- **Eligibility**: Permitted from `frozen`, `issued`, and `disputed`. Strictly forbidden from `paid` or `void`.
+- **Behavior**:
   1. Restores the invoice's draft sections, rows, charges, and header values into a new draft in `invoice_drafts`.
   2. Sets draft title to `Correction: <DOC_NUMBER>`.
   3. Copies historical audit trail into `editHistory` with a system entry: `"Reverted invoice <DOC_NUMBER> to draft for correction"`.
@@ -72,7 +72,7 @@ stateDiagram-v2
 
 ## Consequences
 
-* **Positive**:
-  * Eliminates orphaned, invalid invoices caused by simple billing corrections.
-  * Preserves full multi-draft audit history and attribution.
-  * Protects paid receivables from retroactive tampering.
+- **Positive**:
+  - Eliminates orphaned, invalid invoices caused by simple billing corrections.
+  - Preserves full multi-draft audit history and attribution.
+  - Protects paid receivables from retroactive tampering.

@@ -8,23 +8,23 @@ Each record documents the context, alternatives considered, exact decision taken
 
 ## Decision Index
 
-| ADR | Title | Date | Status | Scope |
-|:---:|:---|:---:|:---:|:---|
-| [**0001**](./0001-four-data-field-categories.md) | **Four-Tier Data Field Categorization Architecture** | 2026-10-15 | Accepted | Schema, Custom Fields, PBAC |
-| [**0002**](./0002-invoice-lifecycle-and-correction-workflow.md) | **Invoice State Machine and Non-Destructive Correction Workflow** | 2026-10-16 | Accepted | Invoices, State Transitions, Audit |
-| [**0003**](./0003-multi-draft-collaboration-and-audit-trail.md) | **Multi-Draft Project Collaboration and Lightweight Audit Trail** | 2026-10-16 | Accepted | Invoices, Drafts, Collaboration |
-| [**0004**](./0004-calculation-precision-and-domain-generalization.md) | **General-Purpose Domain Decoupling, Zero-Float Arithmetic, and Precision** | 2026-10-17 | Accepted | Engine, MathJS, Schema |
-| [**0005**](./0005-numerical-period-based-expenses-and-formula-functions.md) | **Period-Aware Numerical Expenses, AST Math Functions, and Gating** | 2026-10-17 | Accepted | Engine, Expenses, Formula UX |
-| [**0006**](./0006-optional-period-billing-and-backend-engine-isolation.md) | **Optional Period Billing, Backend Engine Isolation, and Multi-Draft Lifecycle** | 2026-10-17 | Accepted | Invoices, Drafts, Scope, Bundles |
-| [**0007**](./0007-prebuilt-optional-service-rows-and-granular-pbac.md) | **Prebuilt Optional Service Rows and Granular Invoicing PBAC Architecture** | 2026-10-17 | Accepted | Templates, Drafts, PBAC, Services |
-| [**0008**](./0008-embedded-api-primary-and-optional-standalone-runner.md) | **Next.js Embedded API Primary Execution and Purely Optional Standalone Server Runner** | 2026-10-17 | Accepted | Monorepo, API, Next.js, DX |
-| [**0009**](./0009-token-capsule-formula-editor-and-engine-hardening.md) | **Token Capsule Formula Editor, Quick Swap Menu, Autocomplete Layout, and DAG Engine Hardening** | 2026-10-18 | Accepted | Formula Editor, UX, DAG, Math Engine, Tests |
-| [**0010**](./0010-adobe-illustrator-tabbed-studio-and-bidirectional-line-items-pool.md) | **Adobe Illustrator Tabbed Studio Sidebar and Bidirectional Grab-and-Drag Line Items Pool** | 2026-10-18 | Accepted | Invoices, Templates, Additional Line Items, DND, UX |
-| [**0011**](./0011-builder-layout-zoom-isolation-and-cross-section-dnd-refactor.md) | **Workspace Zoom Isolation, Full-Cell Row Selection, Token-Only Creation, and Cross-Section DnD** | 2026-10-19 | Accepted | Invoices, Templates, DnD, Layout, UI/UX |
-| [**0012**](./0012-workflow-graph-stage-gating-and-connection-architecture.md) | **Workflow Studio Graph Architecture, Terminal Stage Semantics, Role-Gated Transitions, and Interactive Connection Engine** | 2026-10-19 | Accepted | Workflows, Visual Graph, PBAC, State Machine |
-| [**0013**](./0013-template-sync-legacy-purge-and-database-rebuild.md) | **Template Drift 3-Way Synchronization, Legacy Code & Token Purge, and Clean Baseline Database Rebuild** | 2026-10-20 | Accepted | Invoices, Drafts, Codec, PBAC, DB Rebuild |
-| [**0014**](./0014-workflow-graph-dynamic-degrees-role-gating-modal-and-reachability.md) | **Workflow Studio Dynamic Node Degrees, 5-Color Hierarchy, Modal Gating, and BFS Path Reachability Architecture** | 2026-10-21 | Accepted | Workflows, Visual Graph, PBAC, State Machine, BFS Reachability |
-| [**0015**](./0015-general-template-architecture-and-direct-invoice-generation.md) | **General Template Architecture, Multi-Column Line Items, Studio Overlay/Static Modes, Serial Resequencing, and Direct Invoice Generation** | 2026-10-22 | Accepted | Invoices, Templates, General Sheets, Multi-Column, PBAC |
+|                                           ADR                                           | Title                                                                                                                                       |    Date    |  Status  | Scope                                                          |
+| :-------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------ | :--------: | :------: | :------------------------------------------------------------- |
+|                    [**0001**](./0001-four-data-field-categories.md)                     | **Four-Tier Data Field Categorization Architecture**                                                                                        | 2026-10-15 | Accepted | Schema, Custom Fields, PBAC                                    |
+|             [**0002**](./0002-invoice-lifecycle-and-correction-workflow.md)             | **Invoice State Machine and Non-Destructive Correction Workflow**                                                                           | 2026-10-16 | Accepted | Invoices, State Transitions, Audit                             |
+|             [**0003**](./0003-multi-draft-collaboration-and-audit-trail.md)             | **Multi-Draft Project Collaboration and Lightweight Audit Trail**                                                                           | 2026-10-16 | Accepted | Invoices, Drafts, Collaboration                                |
+|          [**0004**](./0004-calculation-precision-and-domain-generalization.md)          | **General-Purpose Domain Decoupling, Zero-Float Arithmetic, and Precision**                                                                 | 2026-10-17 | Accepted | Engine, MathJS, Schema                                         |
+|       [**0005**](./0005-numerical-period-based-expenses-and-formula-functions.md)       | **Period-Aware Numerical Expenses, AST Math Functions, and Gating**                                                                         | 2026-10-17 | Accepted | Engine, Expenses, Formula UX                                   |
+|       [**0006**](./0006-optional-period-billing-and-backend-engine-isolation.md)        | **Optional Period Billing, Backend Engine Isolation, and Multi-Draft Lifecycle**                                                            | 2026-10-17 | Accepted | Invoices, Drafts, Scope, Bundles                               |
+|         [**0007**](./0007-prebuilt-optional-service-rows-and-granular-pbac.md)          | **Prebuilt Optional Service Rows and Granular Invoicing PBAC Architecture**                                                                 | 2026-10-17 | Accepted | Templates, Drafts, PBAC, Services                              |
+|        [**0008**](./0008-embedded-api-primary-and-optional-standalone-runner.md)        | **Next.js Embedded API Primary Execution and Purely Optional Standalone Server Runner**                                                     | 2026-10-17 | Accepted | Monorepo, API, Next.js, DX                                     |
+|         [**0009**](./0009-token-capsule-formula-editor-and-engine-hardening.md)         | **Token Capsule Formula Editor, Quick Swap Menu, Autocomplete Layout, and DAG Engine Hardening**                                            | 2026-10-18 | Accepted | Formula Editor, UX, DAG, Math Engine, Tests                    |
+| [**0010**](./0010-adobe-illustrator-tabbed-studio-and-bidirectional-line-items-pool.md) | **Adobe Illustrator Tabbed Studio Sidebar and Bidirectional Grab-and-Drag Line Items Pool**                                                 | 2026-10-18 | Accepted | Invoices, Templates, Additional Line Items, DND, UX            |
+|   [**0011**](./0011-builder-layout-zoom-isolation-and-cross-section-dnd-refactor.md)    | **Workspace Zoom Isolation, Full-Cell Row Selection, Token-Only Creation, and Cross-Section DnD**                                           | 2026-10-19 | Accepted | Invoices, Templates, DnD, Layout, UI/UX                        |
+|      [**0012**](./0012-workflow-graph-stage-gating-and-connection-architecture.md)      | **Workflow Studio Graph Architecture, Terminal Stage Semantics, Role-Gated Transitions, and Interactive Connection Engine**                 | 2026-10-19 | Accepted | Workflows, Visual Graph, PBAC, State Machine                   |
+|          [**0013**](./0013-template-sync-legacy-purge-and-database-rebuild.md)          | **Template Drift 3-Way Synchronization, Legacy Code & Token Purge, and Clean Baseline Database Rebuild**                                    | 2026-10-20 | Accepted | Invoices, Drafts, Codec, PBAC, DB Rebuild                      |
+| [**0014**](./0014-workflow-graph-dynamic-degrees-role-gating-modal-and-reachability.md) | **Workflow Studio Dynamic Node Degrees, 5-Color Hierarchy, Modal Gating, and BFS Path Reachability Architecture**                           | 2026-10-21 | Accepted | Workflows, Visual Graph, PBAC, State Machine, BFS Reachability |
+|    [**0015**](./0015-general-template-architecture-and-direct-invoice-generation.md)    | **General Template Architecture, Multi-Column Line Items, Studio Overlay/Static Modes, Serial Resequencing, and Direct Invoice Generation** | 2026-10-22 | Accepted | Invoices, Templates, General Sheets, Multi-Column, PBAC        |
 
 ---
 
@@ -32,9 +32,9 @@ Each record documents the context, alternatives considered, exact decision taken
 
 1. **Immutability of History**: Once an ADR is marked `Accepted`, do not rewrite historical context. If an architectural decision changes later, create a new ADR that explicitly references and supersedes the older one (e.g., `Supersedes ADR-0004`).
 2. **Standard Structure**:
-   * **Title**: `ADR-XXXX: Descriptive Noun Phrase`
-   * **Status**: `Proposed` | `Accepted` | `Deprecated` | `Superseded`
-   * **Date**: ISO Date (`YYYY-MM-DD`)
-   * **Context & Problem Statement**: The exact real-world scenario, limitations, or bug driving the decision.
-   * **Decision**: Clear bullet points, code contracts, schemas, or Mermaid diagrams specifying the solution.
-   * **Consequences**: Explicit positive and negative tradeoffs.
+   - **Title**: `ADR-XXXX: Descriptive Noun Phrase`
+   - **Status**: `Proposed` | `Accepted` | `Deprecated` | `Superseded`
+   - **Date**: ISO Date (`YYYY-MM-DD`)
+   - **Context & Problem Statement**: The exact real-world scenario, limitations, or bug driving the decision.
+   - **Decision**: Clear bullet points, code contracts, schemas, or Mermaid diagrams specifying the solution.
+   - **Consequences**: Explicit positive and negative tradeoffs.

@@ -1,4 +1,5 @@
 ---
+
 name: agent-constitution-maintenance
 description: Strict rules and best practices for creating, maintaining, and synchronizing AGENTS.md / agent.md architectural contracts across the monorepo without drift or conflicting specifications.
 ---
@@ -24,7 +25,6 @@ This skill governs how architectural directives, invariants, and feature contrac
 ## 2. Invariant Synchronization (Zero-Drift Rule)
 
 When an architectural contract evolves in one layer, sibling and child files MUST be synchronized in the same changeset:
-
 1. **Schema & Model Evolution**:
    - When a database table, enum, or column changes (e.g. `documentTypeEnum` or `invoice_drafts.editHistory`), all references in backend and frontend `agent.md` files must be updated immediately.
 2. **State Machine Consistency**:
@@ -54,4 +54,3 @@ Whenever an architectural, domain, or business decision is agreed upon with the 
 2. Follow the standard ADR structure (Title, Status, Date, Deciders, Context, Decision, Consequences).
 3. Update `.agents/decisions/README.md` to register the new ADR in the decision index.
 4. Update relevant `agent.md` files to reflect the new invariants without drift.
-

@@ -7,19 +7,22 @@ This document defines the technical rules, keystroke contracts, and state invari
 ## 1. Keystroke & Input Gating (`use-formula-keydown.ts`)
 
 ### Allowed Character Whitelist
+
 Only the following inputs are permitted into formula mode:
 - **Digits & Decimal**: `0-9`, `.`
 - **Operators & Delimiters**: `+`, `-`, `*`, `/`, `%`, `(`, `)`
 - **Alphabetic Characters**: Letters matching active token prefixes in `UPPER_SNAKE_CASE`.
 
 ### Auto-Capitalization & Exact Token Matching
+
 - All alphabetical input is automatically converted to uppercase (`UPPER_SNAKE_CASE`).
 - **No Auto-Underscore**: Automatic insertion of `_` when typing letters is strictly disabled. The user must explicitly type `_` or press `<Space>` (which converts to `_` if matching a token).
 - **Exact Prefix Continuation**: Typing a letter is allowed ONLY if the resulting segment (`currentLastWord + letter`) forms an exact prefix or valid continuation of an active token in the template. If no match exists, the keystroke is rejected.
 
 ### Canonical Delimiter-Owned Spacing
+
 - **Rule**: Tokens and numbers NEVER own whitespace. Delimiters (binary operators and commas) strictly own spaces.
-  - Binary operators (`+`, `-`, `*`, `/`, `//`, `%`) have strictly one space on either side (` + `, ` - `, ` * `, ` / `, ` // `, ` % `).
+  - Binary operators (`+`, `-`, `*`, `/`, `//`, `%`) have strictly one space on either side (`+`, `-`, `*`, `/`, `//`, `%`).
   - Unary minus clings to its operand (`-10`, `(-5)`).
   - Parentheses have zero internal padding (`(A + B)`, never `( A + B )`).
   - Function calls have zero space before `(` (`CLAMP(x, min, max)`, never `CLAMP (x)`).
@@ -39,11 +42,13 @@ Only the following inputs are permitted into formula mode:
   - Manual deletion of spaces with `<Delete>` is blocked.
 
 ### Parenthesis Balance Guards
+
 - Typing `)` is rejected if the number of closing parentheses would exceed the number of currently open parentheses.
 - Typing `)` automatically collapses any trailing space before it, preventing `(TOKEN )` from leaking into formulas.
 - Typing `(` directly following a complete token or number without an operator is blocked (except after registered math functions).
 
 ### Keyboard Shortcuts
+
 - **Undo**: `Ctrl+Z` (or `Cmd+Z` on macOS).
 - **Redo**: `Ctrl+Shift+Z` (or `Cmd+Shift+Z` on macOS).
 - **Ctrl+Y**: Explicitly blocked to enforce `Ctrl+Shift+Z` across all platforms.
@@ -55,12 +60,14 @@ Only the following inputs are permitted into formula mode:
 ## 2. Autocomplete Engine (`use-formula-autocomplete.ts`)
 
 ### Triggering Conditions
+
 Autocomplete triggers automatically whenever the cursor is at a valid token insertion point:
 1. At the very start of an expression (empty or leading whitespace).
-2. Immediately following an operator: ` + `, ` - `, ` * `, ` / `, ` // `, or `(`.
+2. Immediately following an operator: `+`, `-`, `*`, `/`, `//`, or `(`.
 3. While actively typing a token prefix (`lastWord.length > 0` and not a numeric literal).
 
 ### Exact Matching & Uniform Highlighting
+
 - **No Fuzzy Underscore Stripping**: Search queries never strip underscores. Typing `PORTDUES` will NOT match `PORT_DUES`. The user must type `PORT_` to match.
 - **Matching Tiers**:
   - Tier 1: Exact prefix match (`token.startsWith(query)`).
@@ -75,12 +82,14 @@ Autocomplete triggers automatically whenever the cursor is at a valid token inse
 Circular and out-of-scope tokens are computed via full DAG reachability and disabled simultaneously across **all three UI surfaces**:
 
 ### Multi-Seed Reachability & Cycle Detection
+
 - **Multi-Seed Starting Set**: When evaluating a cell, reachability seeds encompass all identities of that entity (e.g. `rowToken`, `_BASE`, `_CHARGES`, `_TOTAL`, and all row charge items) as well as the containing section tokens it feeds (`SEC_BASE`, `SEC_CHARGES`, `SEC_TOTAL`).
 - **Kahn's Algorithm**: The frontend builds the complete template graph and runs Kahn's topological sort in real time. Any cycle nodes with remaining in-degree are flagged as circular.
 - **Backend Error Parsing**: Any `validationErrors` from the API (such as cycle toasts) are parsed to ensure server-detected cycle tokens are immediately injected into the invalid set.
 - **Row & Section Group Expansion**: If ANY component of a row or section is a downstream dependent or in a cycle, **all tokens belonging to that row or section** (`rowToken`, `_BASE`, `_CHARGES`, `_TOTAL`, and charges) are invalidated.
 
 ### Surface 1: Autocomplete Dropdown
+
 - Dependent tokens are styled with `opacity-50 cursor-not-allowed bg-muted/10` and strikethrough.
 - Rendered with an `AlertTriangle` icon and specific notice (e.g. `Creates circular dependency: 'PORT_DUES' depends on 'Light Charges'`).
 - Hovering explains the specific reason via HTML `title` tooltip.
@@ -89,16 +98,19 @@ Circular and out-of-scope tokens are computed via full DAG reachability and disa
 
 
 ### Surface 2: Token Pool Sidebar (`token-pool/index.tsx`, `sections-tree.tsx`)
+
 - All circular or hidden tokens render with `opacity-35 cursor-not-allowed`, strikethrough, and an `AlertTriangle` warning icon.
 - Hovering over disabled tokens displays a tooltip explaining why (e.g. `Disabled: 'PORT_DUES' creates a circular dependency with Light Charges`).
 - Clicking any disabled token blocks insertion and triggers an error toast with the exact reason.
 
 ### Surface 3: Table Left-Side Token Banners (`table-row.tsx`, `charge-item.tsx`)
+
 - Row and charge token banners on the left edge of the table render with `opacity-35 cursor-not-allowed` and an `AlertTriangle` icon when in formula mode.
 - Hovering explains why the token is disabled.
 - Clicking blocks insertion and displays an error toast with the exact reason.
 
 ### Scope Exclusion Rules
+
 - **Self & Total Exclusion**: A formula cannot reference its own token, its `_TOTAL` variant, its `_BASE` variant, or its `_CHARGES` variant.
 - **Row Base Exclusion**: A row base formula cannot reference any of its own row's charge line items.
 - **Section Scope Exclusion**: Rows and row charges inside Section X CANNOT reference `SEC_X`, `SEC_X_BASE`, `SEC_X_CHARGES`, `SEC_X_TOTAL`, or any section charges belonging to Section X.
@@ -172,5 +184,3 @@ Native browser paste is fully intercepted (`e.preventDefault()`) to prevent form
   - Empty sections render an active droppable zone with placeholder message rather than returning `null`.
   - Backend `updateRow` accepts `sectionId` to support moving rows between sections.
   - `page.tsx`'s `onDragEnd` handles cross-section dragging with optimistic UI updates and server synchronization.
-
-

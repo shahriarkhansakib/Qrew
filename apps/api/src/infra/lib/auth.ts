@@ -97,6 +97,16 @@ export const auth = betterAuth({
     delete: async (key) => {
       await redis.del(key);
     },
+    getAndDelete: async (key) => {
+      const value = await redis.get(key);
+      if (value) {
+        await redis.del(key);
+      }
+      return value ?? null;
+    },
+    increment: async (key, amount) => {
+      return await redis.incrby(key, amount ?? 1);
+    },
   },
   socialProviders: {
     google: {
@@ -149,7 +159,7 @@ export const auth = betterAuth({
       expiresIn: 60 * 15,
     }),
     emailOTP({
-      async sendVerificationOTP({ email, otp, type }) {
+      async sendVerificationOTP({ email, otp, type: _type }) {
         // This catches the 2FA Email request and routes it to Mailpit/Resend
         await sendSmartEmail(
           email,

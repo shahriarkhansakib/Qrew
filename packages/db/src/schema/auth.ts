@@ -140,6 +140,8 @@ export const twoFactor = pgTable(
     secret: text("secret").notNull(),
     backupCodes: text("backup_codes").notNull(),
     verified: boolean("verified").notNull().default(false),
+    failedVerificationCount: integer("failed_verification_count").default(0),
+    lockedUntil: timestamp("locked_until", { mode: "date" }),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -212,6 +214,7 @@ export const invitations = pgTable("invitations", {
   role: text("role"),
   status: text("status").notNull(),
   expiresAt: timestamp("expiresAt", { mode: "date" }).notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   inviterId: text("inviterId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),

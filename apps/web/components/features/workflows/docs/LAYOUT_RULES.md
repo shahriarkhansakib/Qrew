@@ -35,8 +35,8 @@ Why longest-path and NOT shortest-path?
 
 Algorithm (two-pass):
 1. Tentative shortest-path BFS to classify "forward" vs "back" edges.
-   - forward edge:  tentLayer[to] > tentLayer[from]
-   - back edge:     tentLayer[to] <= tentLayer[from]  (cycle edge)
+   - forward edge: tentLayer[to] > tentLayer[from]
+   - back edge: tentLayer[to] <= tentLayer[from] (cycle edge)
 2. Kahn's topological sort on forward-only DAG.
 3. Longest-path: layer[nxt] = max(layer[nxt], layer[cur]+1) as we traverse.
 
@@ -52,14 +52,14 @@ Children of a node WANT offsets: 0, +1, −1, +2, −2, +3, −3, …
 
 Two-pass layout:
 - **Pass 1 (bottom-up)**: Every node computes its subtree [min, max] track
-  footprint recursively.  Leaf = [0, 0].
+  footprint recursively. Leaf = [0, 0].
 - **Pass 2 (top-down)**: Starting from Track 0 for the root, assign each
   child its track by nudging it just enough so its footprint does not
   overlap siblings already placed.
 
 Sentinel initialization (critical):
-  maxPositive = parentTrack − 1   // "nothing placed yet"
-  minNegative = parentTrack + 1   // "nothing placed yet"
+maxPositive = parentTrack − 1 // "nothing placed yet"
+minNegative = parentTrack + 1 // "nothing placed yet"
 This ensures child 0 at desired offset 0 stays on the parent's track
 instead of being pushed off by 1.
 
@@ -67,33 +67,33 @@ instead of being pushed off by 1.
 
 ## Position Stability Rules
 
-| Event | Column changes? | Row changes? |
-|-------|----------------|-------------|
-| Add new node (branch / insert-between) | YES — new node gets its column from parent+1 | YES — bounding-box recalculated |
-| Delete a node | Adjacent nodes splice: parents re-wire to grandchildren | YES — bounding-box recalculated |
-| Add a connection (edge) | **NO** | **NO** |
-| Delete a connection (edge) | **NO** | **NO** |
+| Event                                  | Column changes?                                         | Row changes?                    |
+| -------------------------------------- | ------------------------------------------------------- | ------------------------------- |
+| Add new node (branch / insert-between) | YES — new node gets its column from parent+1            | YES — bounding-box recalculated |
+| Delete a node                          | Adjacent nodes splice: parents re-wire to grandchildren | YES — bounding-box recalculated |
+| Add a connection (edge)                | **NO**                                                  | **NO**                          |
+| Delete a connection (edge)             | **NO**                                                  | **NO**                          |
 
 ---
 
 ## Edge/Arrow Routing — 3 Cases
 
-| Case | Condition | Routing |
-|------|-----------|---------|
-| Forward | source.layer < target.layer | Straight diagonal line (or S-curve bezier) from right-edge to left-edge |
-| Backward / cycle | source.layer >= target.layer | Arc on the LEFT side of the canvas; each back-edge uses a separate rail |
-| Same-column | source.layer === target.layer, different row | U-bend on the RIGHT side of the column; stacked rails |
+| Case             | Condition                                    | Routing                                                                 |
+| ---------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
+| Forward          | source.layer < target.layer                  | Straight diagonal line (or S-curve bezier) from right-edge to left-edge |
+| Backward / cycle | source.layer >= target.layer                 | Arc on the LEFT side of the canvas; each back-edge uses a separate rail |
+| Same-column      | source.layer === target.layer, different row | U-bend on the RIGHT side of the column; stacked rails                   |
 
 ---
 
 ## Connection Constraints (Hard Rules)
 
-| Rule | Enforcement |
-|------|-------------|
-| Nothing connects **TO** the initial (Created) node | Blocked in UI + backend |
-| Nothing connects **FROM** the terminal (Completed) node | Blocked in UI + backend |
-| No direct self-loop (A → A) | Blocked in UI + backend; also guarded during node deletion |
-| Cycles (A → B → C → A) ARE allowed | Only direct A→A is banned |
+| Rule                                                    | Enforcement                                                |
+| ------------------------------------------------------- | ---------------------------------------------------------- |
+| Nothing connects **TO** the initial (Created) node      | Blocked in UI + backend                                    |
+| Nothing connects **FROM** the terminal (Completed) node | Blocked in UI + backend                                    |
+| No direct self-loop (A → A)                             | Blocked in UI + backend; also guarded during node deletion |
+| Cycles (A → B → C → A) ARE allowed                      | Only direct A→A is banned                                  |
 
 ---
 
@@ -110,7 +110,7 @@ alternate: +1 below, −1 above, +2 below, −2 above, etc.
 Clicking "+" on edge A→C:
 1. Create node B with transition B→C.
 2. Patch A: remove transition to C, add transition to B.
-Result: A→B→C. The old A→C edge is surgically replaced.
+   Result: A→B→C. The old A→C edge is surgically replaced.
 
 ## Delete-Node Splice (edge merge)
 
@@ -119,4 +119,4 @@ Deleting node B when A→B→C, A→B→D exist:
 2. Server finds all children of B (outbound edges: C, D).
 3. For each parent: remove edge to B, add edges to all of B's children.
 4. DELETE B (CASCADE removes B's own transitions).
-Result: A→C, A→D. Self-loop guard: if a parent is also a child, that edge is dropped.
+   Result: A→C, A→D. Self-loop guard: if a parent is also a child, that edge is dropped.

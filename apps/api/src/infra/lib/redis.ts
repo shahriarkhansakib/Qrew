@@ -103,6 +103,15 @@ export const redis = {
       return 1;
     }
   },
+  incrby: async (key: string, amount: number = 1): Promise<number> => {
+    try {
+      if (hasUpstash) return await prodRedis!.incrby(key, amount);
+      if (hasIoredis) return await localRedis!.incrby(key, amount);
+      return amount;
+    } catch {
+      return amount;
+    }
+  },
   expire: async (key: string, ttl: number): Promise<number> => {
     try {
       if (hasUpstash) return await prodRedis!.expire(key, ttl);

@@ -25,11 +25,11 @@ on:
   push:
     branches:
       - main
-      - develop     # Added develop branch
+      - develop # Added develop branch
   pull_request:
     branches:
       - main
-      - develop     # Added develop branch
+      - develop # Added develop branch
 
 jobs:
   # ── Job 0: Biome Lint & Format Check ─────────────────────
@@ -70,7 +70,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_dummy
-      NODE_ENV: test   # GitHub gives us a free Ubuntu machine
+      NODE_ENV: test # GitHub gives us a free Ubuntu machine
 
     steps:
       # Step 1: Download your code from GitHub onto the machine

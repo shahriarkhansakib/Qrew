@@ -11,10 +11,10 @@
 
 The invoice frontend has two distinct editing surfaces:
 
-| Surface | Path | Mode |
-|---|---|---|
-| **Template Builder** | `/org-admin/invoice-templates/[id]` | Admin design-time. Edits the master template structure. |
-| **Invoice Draft Editor** | `/dashboard/invoices/drafts/[id]` | Staff fill-time. Edits only the draft's JSONB copy. Never touches master template. |
+| Surface                  | Path                                | Mode                                                                               |
+| ------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------- |
+| **Template Builder**     | `/org-admin/invoice-templates/[id]` | Admin design-time. Edits the master template structure.                            |
+| **Invoice Draft Editor** | `/dashboard/invoices/drafts/[id]`   | Staff fill-time. Edits only the draft's JSONB copy. Never touches master template. |
 
 ---
 
@@ -67,21 +67,21 @@ The `BuilderContext` is the single shared state provider for the entire template
 
 ### Key State Properties
 
-| Property | Type | Purpose |
-|---|---|---|
-| `templateId` | string | Current template ID |
-| `mode` | `"build"` \| `"fill"` \| `"draft"` | Controls which UI elements are shown (see Section 5) |
-| `selectedCell` | `CellAddress \| null` | The currently active formula cell. When non-null, the formula bar appears. |
-| `tokenPoolOpen` | boolean | Whether the token sidebar is expanded |
-| `apiBasePath` | string | Base path for all API calls |
-| `invalidateKey` | string[] | React Query key to invalidate on mutations |
+| Property        | Type                               | Purpose                                                                    |
+| --------------- | ---------------------------------- | -------------------------------------------------------------------------- |
+| `templateId`    | string                             | Current template ID                                                        |
+| `mode`          | `"build"` \| `"fill"` \| `"draft"` | Controls which UI elements are shown (see Section 5)                       |
+| `selectedCell`  | `CellAddress \| null`              | The currently active formula cell. When non-null, the formula bar appears. |
+| `tokenPoolOpen` | boolean                            | Whether the token sidebar is expanded                                      |
+| `apiBasePath`   | string                             | Base path for all API calls                                                |
+| `invalidateKey` | string[]                           | React Query key to invalidate on mutations                                 |
 
 ### Key Helper Functions
 
-| Function | Returns | Notes |
-|---|---|---|
-| `cellFromRow(...)` | `CellAddress` | Creates a cell address for a row's value cell |
-| `cellFromRowCharge(...)` | `CellAddress` | Creates a cell address for a row charge's formula |
+| Function                     | Returns       | Notes                                                 |
+| ---------------------------- | ------------- | ----------------------------------------------------- |
+| `cellFromRow(...)`           | `CellAddress` | Creates a cell address for a row's value cell         |
+| `cellFromRowCharge(...)`     | `CellAddress` | Creates a cell address for a row charge's formula     |
 | `cellFromSectionCharge(...)` | `CellAddress` | Creates a cell address for a section charge's formula |
 
 ### CellAddress Shape
@@ -131,11 +131,11 @@ template-builder-workspace.tsx          ← Root: fetches template data, owns la
 
 The `mode` prop controls which editing controls are visible:
 
-| Mode | Who uses it | Controls shown |
-|---|---|---|
+| Mode      | Who uses it                  | Controls shown                                                                               |
+| --------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
 | `"build"` | Admin designing the template | All controls: Add Row, Add Section, Add Charge, formula bar, reorder handles, delete buttons |
-| `"fill"` | Staff filling in a draft | Only value input fields. No structural editing. Formula bar hidden. No add/delete buttons. |
-| `"draft"` | Draft edit mode | Same as `build` but targets `draftSections` JSONB, not the master template |
+| `"fill"`  | Staff filling in a draft     | Only value input fields. No structural editing. Formula bar hidden. No add/delete buttons.   |
+| `"draft"` | Draft edit mode              | Same as `build` but targets `draftSections` JSONB, not the master template                   |
 
 > **Note:** Draft page starts in View Mode (read-only). Edit Mode (`"draft"`) is entered only when the user explicitly clicks "Edit Draft". This is controlled by a React state boolean on the draft page, not URL params.
 
@@ -239,7 +239,6 @@ fmt(val: number | null | undefined): string
 ### Token Evaluation Order (Critical — do not change)
 
 Within `buildTokenMap`, each row is evaluated in this order:
-
 1. Compute `rowBase` (formula or `initialValue`)
 2. **Register `tokens[rowToken] = rowBase`** — MUST happen before charge evaluation
 3. Register `tokens[rowToken + '_TOTAL'] = rowBase` (preliminary)
@@ -254,7 +253,6 @@ Within `buildTokenMap`, each row is evaluated in this order:
 ## 10. Draft Value Filler (`draft-value-filler.tsx`)
 
 Used on the invoice draft page in `"fill"` mode. Renders a form where staff enter actual values for `normal`-type rows.
-
 - Reads `draftSections` from the draft record
 - For each `normal`-type row, renders a numeric input
 - `formula`-type rows show their computed value (read-only)

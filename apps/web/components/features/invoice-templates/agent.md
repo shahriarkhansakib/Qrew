@@ -33,6 +33,7 @@ components/features/invoice-templates/
 ## 2. Table Layout Conventions
 
 ### A. Standard Templates (`template-builder-workspace.tsx`, `template-row-list.tsx`)
+
 - **Two-Column USD Layout**:
   - **USD1 (Left Column)**: Base values for rows (`normal` or `formula`) and row charges. Clickable to activate formula bar.
   - **USD2 (Right Column)**: Read-only group total (`rowBase + sum(rowCharges)`).
@@ -40,6 +41,7 @@ components/features/invoice-templates/
 - **Token Badge Overlap**: Leftward expandable formula badges on hover (`absolute right-0 top-1`).
 
 ### B. General Templates (`sheet-builder/sheet-builder-workspace.tsx`)
+
 - **Dynamic Columns (`columns: TemplateColumnDefinition[]`)**:
   - Arbitrary user-defined columns: text, number, currency, date, single-select.
   - Column drag-to-resize divider handles with live pixel width updates.
@@ -88,6 +90,6 @@ components/features/invoice-templates/
 
 ## 6. Direct Invoice Generation & Navigation PBAC
 
-- **Top Bar Generation**: `/org-admin/invoice-templates/[id]` top navigation includes a prominent **`[ Generate Invoice ]`** button beside *Preview Template*.
+- **Top Bar Generation**: `/org-admin/invoice-templates/[id]` top navigation includes a prominent **`[ Generate Invoice ]`** button beside _Preview Template_.
 - **Template Catalog Row Actions**: Every template in `/org-admin/invoice-templates` includes a 1-click **`[ Generate Invoice ]`** button.
 - **Draft Workspace Routing**: When opening `/dashboard/invoices/drafts/[id]`, the page detects if the source template is `general` or has custom columns, automatically mounting `SheetBuilderWorkspace` and hydrating all `cellValues`.
