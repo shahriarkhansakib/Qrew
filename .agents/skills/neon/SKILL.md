@@ -1,23 +1,22 @@
 ---
-
 name: neon
 description: >-
-Overview of Neon, a complete set of cloud backend primitives for apps and
-agents, spanning Lakebase Postgres, Auth, the Data API, Object Storage, Compute
-Functions, and the AI Gateway. Start here to route to the right Neon skill, set
-up the CLI or MCP server, and follow the branch-first workflow. Use when "Neon"
-or "Lakebase Postgres" is mentioned, or when any of its individual capabilities
-are the trigger: "object storage" or "S3", "buckets", "serverless functions",
-"AI gateway", "call an LLM", "logs", "branch logs", "query logs",
-"log export", "Loki", "Grafana", "observability", "telemetry", "postgres",
-"database", or "backend". Also use when there is no Neon account yet, the
-user cannot sign in or provide an API key right now and needs a project they
-can claim later, or the user asks for a throwaway DATABASE_URL, Claimable Neon,
-Claimable Postgres, neon.new, claimable.neon.tech, instant Postgres, a no-signup
-database, temporary postgres, quick postgres, a no credit card database, or
-npx neon-new.
+  Overview of Neon, a complete set of cloud backend primitives for apps and
+  agents, spanning Lakebase Postgres, Auth, the Data API, Object Storage, Compute
+  Functions, and the AI Gateway. Start here to route to the right Neon skill, set
+  up the CLI or MCP server, and follow the branch-first workflow. Use when "Neon"
+  or "Lakebase Postgres" is mentioned, or when any of its individual capabilities
+  are the trigger: "object storage" or "S3", "buckets", "serverless functions",
+  "AI gateway", "call an LLM", "logs", "branch logs", "query logs",
+  "log export", "Loki", "Grafana", "observability", "telemetry", "postgres",
+  "database", or "backend". Also use when there is no Neon account yet, the
+  user cannot sign in or provide an API key right now and needs a project they
+  can claim later, or the user asks for a throwaway DATABASE_URL, Claimable Neon,
+  Claimable Postgres, neon.new, claimable.neon.tech, instant Postgres, a no-signup
+  database, temporary postgres, quick postgres, a no credit card database, or
+  npx neon-new.
 metadata:
-source: https://github.com/neondatabase/agent-skills/tree/main/skills/neon
+  source: https://github.com/neondatabase/agent-skills/tree/main/skills/neon
 ---
 
 # Neon

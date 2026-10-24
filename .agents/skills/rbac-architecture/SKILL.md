@@ -1,5 +1,4 @@
 ---
-
 name: rbac-architecture
 description: Rules for enforcing Permission-Based Access Control (PBAC/RBAC) in frontend React components and navigation.
 ---

@@ -1,5 +1,4 @@
 ---
-
 name: playwright-e2e-testing
 description: Write and audit Playwright end-to-end tests for the Next.js frontend, including multi-tenant host-header isolation, PBAC feature gating, and strict visual/headed locators.
 ---

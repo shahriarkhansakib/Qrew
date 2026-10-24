@@ -1,5 +1,4 @@
 ---
-
 name: k6-load-testing
 description: Write Grafana k6 JavaScript stress tests targeting the AST Invoice Formula Engine and Neon serverless connection-pool limits under Vercel serverless functions.
 ---

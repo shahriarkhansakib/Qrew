@@ -1,5 +1,4 @@
 ---
-
 name: vitest-backend-testing
 description: Write rigorous Vitest backend integration tests for the Next.js/Hono/Drizzle B2B SaaS monolith using a real ephemeral PostgreSQL database, isolated multi-tenant PBAC contexts, database-integrity assertions, and exhaustive Invoice Formula Engine edge-case coverage.
 ---

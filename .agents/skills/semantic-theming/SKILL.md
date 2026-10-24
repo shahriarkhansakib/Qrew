@@ -1,5 +1,4 @@
 ---
-
 name: semantic-theming
 description: Guidelines for Layer 1 Tailwind gating, semantic CSS variables, and Dark Mode compatibility.
 ---

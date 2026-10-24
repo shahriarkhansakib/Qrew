@@ -1,5 +1,4 @@
 ---
-
 name: workflow-engine-rules
 description: Architectural guidelines for modifying the XYFlow (React Flow) visual workflow builder and graph execution engine.
 ---

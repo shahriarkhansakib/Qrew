@@ -1,5 +1,4 @@
 ---
-
 name: data-field-categorization
 description: The 4-category architectural rule for implementing new fields, tables, or custom data points.
 ---

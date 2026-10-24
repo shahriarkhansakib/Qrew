@@ -1,5 +1,4 @@
 ---
-
 name: permission-lifecycle-management
 description: Architectural rules and lifecycle protocols for declaring, modifying, deprecating, and enforcing strongly-typed PBAC permissions across the monorepo.
 ---

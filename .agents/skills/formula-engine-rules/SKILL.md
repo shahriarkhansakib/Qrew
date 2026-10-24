@@ -1,5 +1,4 @@
 ---
-
 name: formula-engine-rules
 description: Strict guidelines and architectural rules for interacting with, modifying, or extending the Formula Engine and Invoice Builder.
 ---

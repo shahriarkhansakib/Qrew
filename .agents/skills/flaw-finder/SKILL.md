@@ -1,5 +1,4 @@
 ---
-
 name: flaw-finder
 description: Systematic methodology and catalog for auditing, discovering, and eliminating hidden architectural, PBAC, caching, and database flaws across the monorepo.
 ---

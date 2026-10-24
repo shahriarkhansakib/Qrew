@@ -1,5 +1,4 @@
 ---
-
 name: agent-constitution-maintenance
 description: Strict rules and best practices for creating, maintaining, and synchronizing AGENTS.md / agent.md architectural contracts across the monorepo without drift or conflicting specifications.
 ---

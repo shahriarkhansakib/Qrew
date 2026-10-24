@@ -1,5 +1,4 @@
 ---
-
 name: multi-tenant-security
 description: Mandatory security protocols for database isolation, PBAC, and multi-tenant scoping.
 ---
