@@ -14,9 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiUrl } from "@/lib/constants";
 import { usePermissionStore } from "@/store/use-permission-store";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002";
 
 interface RoleBuilderProps {
   roleId?: string; // undefined = create mode, string = edit mode

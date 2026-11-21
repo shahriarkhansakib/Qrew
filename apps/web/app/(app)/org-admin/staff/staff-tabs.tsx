@@ -6,13 +6,12 @@ import { Can } from "@/components/features/auth/can";
 import { InvitationsDataTable } from "@/components/features/staff/invitations-data-table";
 import { StaffDataTable } from "@/components/features/staff/staff-data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { apiUrl } from "@/lib/constants";
 
 export function StaffTabs() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentTab = searchParams.get("tab") || "active";
-
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002";
 
   // Fetch pending invites just for the badge count (React Query automatically dedupes this!)
   const { data: invitations = [] } = useQuery({

@@ -5,16 +5,19 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, emailOTP, magicLink, organization, twoFactor } from "better-auth/plugins";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
+import { buildAuthOriginConfig, resolveAppOrigin } from "./auth-origin";
 import { logger } from "./logger";
 import { redis } from "./redis";
 
 const betterAuthSecret =
   process.env.BETTER_AUTH_SECRET || "e2e-secret-key-32-characters-minimum-length";
-const betterAuthUrl = process.env.BETTER_AUTH_URL || "http://localhost:5002";
-const nextPublicAppUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:5002";
 const googleClientId = process.env.GOOGLE_CLIENT_ID || "mock-google-client-id";
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || "mock-google-client-secret";
 const resendApiKey = process.env.RESEND_API_KEY || "re_mock_api_key";
+
+const authOrigins = buildAuthOriginConfig();
+
+export { resolveAppOrigin };
 
 const resend = new Resend(resendApiKey);
 
@@ -62,18 +65,15 @@ export const auth = betterAuth({
     },
   }),
   secret: betterAuthSecret,
-  baseURL: betterAuthUrl,
-  trustedOrigins: Array.from(
-    new Set(
-      [
-        nextPublicAppUrl.replace(/['"]/g, "").replace(/\/+$/, ""),
-        "http://localhost:3001",
-        ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS
-          ? process.env.BETTER_AUTH_TRUSTED_ORIGINS.split(",")
-          : []),
-      ].filter(Boolean),
-    ),
-  ),
+  baseURL: {
+    allowedHosts: authOrigins.allowedHosts,
+    fallback: authOrigins.fallbackOrigin,
+    protocol: authOrigins.isVercel ? "https" : "auto",
+  },
+  advanced: {
+    trustedProxyHeaders: true,
+  },
+  trustedOrigins: authOrigins.trustedOrigins,
   session: {
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,
@@ -117,9 +117,9 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
-    sendResetPassword: async ({ user, url, token }) => {
+    sendResetPassword: async ({ user, url: _url, token }) => {
       // Point DIRECTLY to the Next.js frontend, bypassing the intermediate API
-      const appUrl = nextPublicAppUrl.replace(/['"]/g, "").replace(/\/+$/, "");
+      const appUrl = resolveAppOrigin();
       const frontendUrl = `${appUrl}/reset-password?token=${token}`;
       await sendSmartEmail(
         user.email,

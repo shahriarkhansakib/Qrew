@@ -5,8 +5,8 @@ import { logger } from "./logger";
 const redisLog = logger.child({ module: "redis" });
 
 const redisUrl = process.env.REDIS_URL;
-const upstashUrl = process.env.UPSTASH_URL;
-const upstashToken = process.env.UPSTASH_TOKEN;
+const upstashUrl = process.env.UPSTASH_URL || process.env.UPSTASH_REDIS_REST_URL;
+const upstashToken = process.env.UPSTASH_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
 // Determine which client to use:
 // 1. Upstash if explicit Upstash REST credentials exist

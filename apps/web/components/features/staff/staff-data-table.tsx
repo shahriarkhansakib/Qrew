@@ -31,6 +31,7 @@ import {
   FilterableTableHeader,
 } from "@/components/ui/table-filter-components";
 import { useTableCellFilter } from "@/hooks/use-table-cell-filter";
+import { apiUrl } from "@/lib/constants";
 import { EditStaffRoleModal } from "./edit-staff-role-modal";
 
 interface StaffMember {
@@ -58,7 +59,6 @@ interface StaffDataTableProps {
 }
 
 export function StaffDataTable({ isReadOnly = true }: StaffDataTableProps) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002";
   const _router = useRouter();
 
   // State for Edit Modal and AlertDialog

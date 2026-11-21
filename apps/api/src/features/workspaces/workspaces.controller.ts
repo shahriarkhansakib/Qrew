@@ -148,8 +148,8 @@ export class WorkspacesController {
         where: eq(users.email, normalizedEmail),
       });
 
-      const { sendSmartEmail } = await import("../../infra/lib/auth");
-      const frontendUrl = `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite?id=${inviteId}`;
+      const { resolveAppOrigin, sendSmartEmail } = await import("../../infra/lib/auth");
+      const frontendUrl = `${resolveAppOrigin()}/accept-invite?id=${inviteId}`;
       const orgName = org?.name || "a workspace";
 
       const emailContent = existingUser

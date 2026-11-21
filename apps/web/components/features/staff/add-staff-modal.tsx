@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { apiUrl } from "@/lib/constants";
 
 export function InviteStaffModal() {
   const router = useRouter();
@@ -33,8 +34,6 @@ export function InviteStaffModal() {
 
   const [email, setEmail] = useState("");
   const [roleId, setRoleId] = useState("");
-
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002";
 
   // 1. Fetch available roles for the dropdown using TanStack Query
   const { data, isLoading: isLoadingRoles } = useQuery({
