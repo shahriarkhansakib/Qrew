@@ -1,36 +1,55 @@
+import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
+import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
 // ---------------------------------------------------------------
-// Environment guard
+// Environment-aware database client (lazily initialized at runtime)
 // ---------------------------------------------------------------
-
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not set.");
-}
-
-const DATABASE_URL = process.env.DATABASE_URL;
-const isProd = process.env.NODE_ENV === "production";
-
-// ---------------------------------------------------------------
-// Environment-aware database client
-// ---------------------------------------------------------------
-
-import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
-import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 
 function createDb() {
-  if (isProd) {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is not set.");
+  }
+
+  if (process.env.NODE_ENV === "production") {
     const { neon } = require("@neondatabase/serverless");
-    const sql = neon(DATABASE_URL);
+    const sql = neon(databaseUrl);
     return drizzleNeon(sql, { schema });
   }
 
   const postgres = require("postgres");
-  const client = postgres(DATABASE_URL);
+  const client = postgres(databaseUrl);
   return drizzlePostgres(client, { schema });
 }
 
-export const db = createDb();
+type DbClient = ReturnType<typeof createDb>;
+
+let cachedDb: DbClient | undefined;
+
+export function getDb(): DbClient {
+  if (!cachedDb) {
+    cachedDb = createDb();
+  }
+  return cachedDb;
+}
+
+export const db: DbClient = new Proxy({} as DbClient, {
+  get(_target, prop) {
+    const instance = getDb();
+    const value = Reflect.get(instance, prop, instance);
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+  has(_target, prop) {
+    return Reflect.has(getDb(), prop);
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getDb());
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    return Reflect.getOwnPropertyDescriptor(getDb(), prop);
+  },
+});
 
 export * from "./formula-codec";
 export * from "./org-initializer";

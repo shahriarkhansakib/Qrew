@@ -2,7 +2,7 @@ import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { accounts, db, passkeys, sessions, twoFactor, users } from "@starter/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../../infra/lib/logger";
-import { s3Client } from "../../infra/lib/storage";
+import { getS3Client } from "../../infra/lib/storage";
 
 const usersServiceLog = logger.child({ module: "users-service" });
 
@@ -10,7 +10,7 @@ export const UsersService = {
   async softDeleteAccount(userId: string): Promise<{ success: boolean }> {
     // Storage Cleanup (Fails gracefully)
     try {
-      await s3Client.send(
+      await getS3Client().send(
         new DeleteObjectCommand({
           Bucket: process.env.R2_BUCKET_NAME!,
           Key: `avatars/${userId}.webp`,
