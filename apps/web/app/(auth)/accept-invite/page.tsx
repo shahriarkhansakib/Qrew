@@ -21,8 +21,7 @@ import {
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient, signIn, signOut, signUp, useSession } from "@/lib/auth-client";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002";
+import { apiUrl } from "@/lib/constants";
 
 // Schemas for embedded forms
 const loginSchema = z.object({

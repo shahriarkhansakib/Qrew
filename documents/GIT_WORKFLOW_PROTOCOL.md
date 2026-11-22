@@ -25,19 +25,20 @@ gitGraph
     merge develop id: "Release v1.1.0" tag: "v1.1.0"
 ```
 
-| Branch | Purpose | Protection Rules |
-| :--- | :--- | :--- |
-| **`main`** | Production-ready releases. Deployed to production environments. | Strictly protected. No direct pushes. Requires PR from `develop` and passing CI/CD. |
-| **`develop`** | Integration branch for ongoing development and testing. | Protected. No direct pushes. All new work merges into `develop` via Pull Requests. |
-| **`feature/<name>`** | Scoped feature work (e.g. `feature/invoice-engine-v2`). | Branched off `develop`. Merges back into `develop` via PR. |
-| **`fix/<name>`** | Bugfixes and issue patches. | Branched off `develop` (or `main` for hotfixes). |
-| **`refactor/<name>`** | Internal refactors with zero functional change. | Branched off `develop`. |
+| Branch                | Purpose                                                         | Protection Rules                                                                    |
+| :-------------------- | :-------------------------------------------------------------- | :---------------------------------------------------------------------------------- |
+| **`main`**            | Production-ready releases. Deployed to production environments. | Strictly protected. No direct pushes. Requires PR from `develop` and passing CI/CD. |
+| **`develop`**         | Integration branch for ongoing development and testing.         | Protected. No direct pushes. All new work merges into `develop` via Pull Requests.  |
+| **`feature/<name>`**  | Scoped feature work (e.g. `feature/invoice-engine-v2`).         | Branched off `develop`. Merges back into `develop` via PR.                          |
+| **`fix/<name>`**      | Bugfixes and issue patches.                                     | Branched off `develop` (or `main` for hotfixes).                                    |
+| **`refactor/<name>`** | Internal refactors with zero functional change.                 | Branched off `develop`.                                                             |
 
 ---
 
 ## 2. Feature Development Lifecycle
 
 ### Step 1: Branch from `develop`
+
 Never branch from stale local state or directly from `main`:
 ```bash
 git checkout develop
@@ -46,11 +47,13 @@ git checkout -b feature/<descriptive-kebab-name>
 ```
 
 ### Step 2: Atomic Micro-Commits
+
 Commit frequently in small, logical chunks rather than a single monolithic commit at the end of the sprint:
-* Each commit should represent one cohesive change (e.g., a schema migration, an API endpoint, a test suite, a UI component).
-* Keep commits buildable: every commit should compile without breaking the build.
+- Each commit should represent one cohesive change (e.g., a schema migration, an API endpoint, a test suite, a UI component).
+- Keep commits buildable: every commit should compile without breaking the build.
 
 ### Step 3: Conventional Commit Standards
+
 All commit messages must adhere to the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
 ```
@@ -59,20 +62,21 @@ All commit messages must adhere to the [Conventional Commits](https://www.conven
 [optional body explaining rationale and context]
 ```
 
-* **Types**:
-  * `feat`: A new feature or capability.
-  * `fix`: A bug fix or error correction.
-  * `refactor`: Code restructuring without changing behavior.
-  * `test`: Adding or correcting tests.
-  * `docs`: Documentation, ADRs, or README updates.
-  * `chore`: Build scripts, dependencies, or configuration changes.
-* **Scope examples**: `invoices`, `drafts`, `db`, `engine`, `auth`, `ui`.
+- **Types**:
+  - `feat`: A new feature or capability.
+  - `fix`: A bug fix or error correction.
+  - `refactor`: Code restructuring without changing behavior.
+  - `test`: Adding or correcting tests.
+  - `docs`: Documentation, ADRs, or README updates.
+  - `chore`: Build scripts, dependencies, or configuration changes.
+- **Scope examples**: `invoices`, `drafts`, `db`, `engine`, `auth`, `ui`.
 
 ---
 
 ## 3. Git Hooks & Code Quality Tooling
 
 ### Husky Automation
+
 The repository uses [Husky](https://typicode.github.io/husky/) to automatically enforce code standards locally:
 1. **`.husky/pre-commit`**:
    Automatically runs `pnpm exec biome check --write --staged --no-errors-on-unmatched` before every commit. This formats, lints, and organizes imports for all staged files. Any non-fixable lint violation halts the commit.
@@ -82,6 +86,7 @@ The repository uses [Husky](https://typicode.github.io/husky/) to automatically 
    Commits with invalid headers (e.g., `updated stuff`, `WIP`) are rejected immediately.
 
 ### Biome Tooling (Linting & Formatting)
+
 We use [Biome](https://biomejs.dev/) for sub-millisecond linting, code formatting, and import organization:
 ```bash
 # Check and auto-fix formatting & linting issues across the entire project
@@ -113,6 +118,7 @@ flowchart TD
 ```
 
 ### Tier 1: TypeScript Type Checking
+
 Ensures strict type-safety across all monorepo workspaces (`@starter/api`, `@starter/web`, `@starter/db`):
 ```bash
 # Typecheck all workspaces in topological dependency order
@@ -123,6 +129,7 @@ pnpm --filter @starter/web typecheck
 ```
 
 ### Tier 2: Vitest Unit & Integration Testing (Mandatory)
+
 Every API endpoint, formula evaluator rule, precision boundary, and database transition is verified using Vitest:
 ```bash
 # Run all tests across the monorepo via Turborepo
@@ -139,9 +146,10 @@ pnpm --filter @starter/api test:coverage
 ```
 
 ### Tier 3: Playwright End-to-End (E2E) Testing (Optional / Pre-Release)
+
 The `@starter/e2e` workspace contains browser-based end-to-end tests validating full user journeys (authentication, multi-tenancy, PBAC permission boundaries, invoice workflows, and UI interactions):
-* **When to run**: Optional during routine micro-commits; **recommended before merging major feature branches into `develop` or preparing production releases**.
-* **Automatic Web Server**: Playwright automatically boots the Next.js frontend and backend API on `http://localhost:5002` (`pnpm dev`) with a 120-second timeout.
+- **When to run**: Optional during routine micro-commits; **recommended before merging major feature branches into `develop` or preparing production releases**.
+- **Automatic Web Server**: Playwright automatically boots the Next.js frontend and backend API on `http://localhost:5002` (`pnpm dev`) with a 120-second timeout.
 
 ```bash
 # Run full headless E2E test suite
@@ -184,7 +192,9 @@ pnpm test:e2e
 ## 6. Pull Request (PR) Protocol
 
 ### Creating the PR
+
 1. Push your feature branch:
+
    ```bash
    git push -u origin feature/<descriptive-kebab-name>
    ```
@@ -193,26 +203,32 @@ pnpm test:e2e
 
 ```markdown
 ## Summary of Changes
+
 - High-level overview of what this PR introduces or resolves.
 
 ## Tracks / Work Completed
+
 - [x] Track A: Multi-draft collaboration & state machine
 - [x] Track B: Precision math & domain generalization
 - [x] Track C: Smart expenses & formula functions
 
 ## Architecture & ADR References
+
 - Relates to ADR-0001, ADR-0002, ADR-0004 in `.agents/decisions/`
 
 ## Testing Evidence
+
 - [x] Vitest: All API unit & integration test files passing (100% pass rate)
 - [x] TypeScript: Clean typecheck across all workspaces (0 errors)
 - [x] Biome: Formatting & lint checks passing (pnpm check:ci)
 - [x] Playwright E2E: Verified critical paths (optional/applicable)
 
 ## Breaking Changes / Database Migrations
+
 - Detail any schema changes or env variables required.
 ```
 
 ### Review & Merge Strategy
-* **Squash and Merge** (or Rebase Merge): Preferred to keep a clean, linear git history on `develop`.
-* Delete the feature branch upon successful merge to prevent branch clutter.
+
+- **Squash and Merge** (or Rebase Merge): Preferred to keep a clean, linear git history on `develop`.
+- Delete the feature branch upon successful merge to prevent branch clutter.

@@ -306,7 +306,7 @@ export default function TemplateBuilderPage() {
                 counter++;
               }
 
-              const hasFormula = Boolean(catalogItem.formula && catalogItem.formula.trim());
+              const hasFormula = Boolean(catalogItem.formula?.trim());
               const valueType = hasFormula ? "formula" : catalogItem.valueType || "normal";
 
               try {

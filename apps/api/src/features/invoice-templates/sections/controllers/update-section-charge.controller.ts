@@ -67,7 +67,7 @@ export async function updateSectionCharge(c: Context) {
   const templateId = chargeCheck[0].section.templateId;
 
   const context = await getTemplateFormulaContext(templateId, organizationId);
-  let encodedFormula;
+  let encodedFormula: string | undefined;
   if (parsed.data.formula !== undefined) {
     encodedFormula = context.encode(parsed.data.formula) ?? parsed.data.formula;
   }

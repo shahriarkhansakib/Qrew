@@ -1,9 +1,9 @@
 import "dotenv/config";
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
-import fs from "fs";
-import path from "path";
 import postgres from "postgres";
 import { v4 as uuidv4 } from "uuid";
 import { seedOrganizationDefaults } from "./org-initializer";

@@ -389,7 +389,7 @@ export class InvoiceTemplatesController {
         const newValueType =
           body.valueType !== undefined
             ? body.valueType
-            : newFormula && newFormula.trim()
+            : newFormula?.trim()
               ? "formula"
               : r.valueType || "normal";
 

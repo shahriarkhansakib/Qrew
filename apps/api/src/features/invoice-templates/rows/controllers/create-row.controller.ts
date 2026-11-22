@@ -76,7 +76,7 @@ export async function createRow(c: Context) {
     rowToken,
     label,
     description,
-    orderIndex,
+    orderIndex: _orderIndex,
     valueType,
     formula,
     initialValue,

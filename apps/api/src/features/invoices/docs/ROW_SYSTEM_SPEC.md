@@ -1,4 +1,5 @@
 # THE ROW SYSTEM — COMPLETE FEATURE SPECIFICATION
+
 ## For Coding Agent Implementation Reference
 
 ---
@@ -23,6 +24,7 @@ These map to the two USD columns in the PDF. This is fundamental. Every row has 
 ## 2. The Seven Row Types
 
 ### 2.1 `formula`
+
 **What it does:** Evaluates a mathematical expression using injectable tokens.
 
 **Key fields:**
@@ -49,6 +51,7 @@ With FILE_GRT = 20151, ORG_VAT_RATE = 0.15:
 ---
 
 ### 2.2 `constant`
+
 **What it does:** Holds a fixed numeric value set by the admin. Pre-filled on every invoice.
 
 **Key fields:**
@@ -72,6 +75,7 @@ constantValue:  1230.000000
 ---
 
 ### 2.3 `manual`
+
 **What it does:** An intentionally empty row. Staff must input the value per invoice.
 
 **Key fields:**
@@ -96,6 +100,7 @@ placeholder:  "Enter amount..."
 ---
 
 ### 2.4 `section_aggregate`
+
 **What it does:** Sums all non-aggregate rows in a target section and applies a formula to that sum. This is how VAT, AIT, commissions, and other section-level calculations are handled.
 
 **Key fields:**
@@ -135,6 +140,7 @@ At evaluation:
 ---
 
 ### 2.5 `multi_value`
+
 **What it does:** A single logical row that contains multiple sub-calculation components. All components combine to produce the row's base value. This is for cases where one "line item" in the invoice is actually the result of multiple calculations or sub-costs that share a single SL number.
 
 **Key fields:**
@@ -194,6 +200,7 @@ PDF renders as:
 ---
 
 ### 2.6 `header_label`
+
 **What it does:** A non-calculating row used purely for visual organization within the invoice. Produces no numeric values.
 
 **Key fields:**
@@ -209,6 +216,7 @@ PDF renders as:
 ---
 
 ### 2.7 `grand_total`
+
 **What it does:** Computes the final invoice total. Sums all section totals (or specific row values).
 
 **Key fields:**
@@ -303,9 +311,11 @@ Right column (total): 9,425.64   ← SECTION_SUM + aggregate formula result
 Neither column shown in PDF. Row computed and added to scope for other rows to reference.
 
 ### How the Grand Total Is Computed
+
 The grand total sums ALL values in the **right column** (totalValue) across all rows. Not the left column. This is the legally binding amount.
 
 ### The `showSubtotalColumn` PDF Layout Setting
+
 When `invoice_pdf_layouts.showSubtotalColumn = false`, the left column is hidden entirely in the PDF. All rows show only the right column. This produces the single-column invoice format. When `true`, the left column is shown for rows where `baseValue ≠ totalValue`.
 
 ---
@@ -336,12 +346,14 @@ Renders as: "PORT DUES @ US$ 0.306 PER GRT X 46668"
 This is the common and useful one. When staff open an invoice for a vessel with GRT 46668, the label automatically shows the actual number. When they open an invoice for a vessel with GRT 20151, it shows 20151. The template never needs to be edited.
 
 ### Formatting Rules for `{{$TOKEN}}`
+
 - `number` type ORG configs: renders as the raw number (`"121.20"`)
 - `percentage` type ORG configs: renders as percentage (`"0.15"` → `"15%"`)
 - `currency_rate` type ORG configs: renders with 2 decimal places
 - `FILE_*` values: renders as-is from the source field
 
 ### When Interpolation Runs
+
 Text interpolation runs at PDF generation time, after formula evaluation. It uses the same `resolvedScope` that the formula engine used. This means:
 - At preview time: labels show interpolated values (so you can see "PER GRT X 46668" in the preview)
 - In frozen invoice_line_items: the `label` and `subDescription` columns store the INTERPOLATED values (the resolved text, not the template string)
@@ -371,6 +383,7 @@ The `qualifier` field is a standardized reference label shown at the end of the 
 The `rowToken` is the row's identifier within the formula namespace. It is UPPER_SNAKE_CASE, unique per template, and set at creation time.
 
 ### Rules
+
 - Format: `^[A-Z][A-Z0-9_]*$` — must start with a letter, only uppercase letters, digits, and underscores
 - Maximum 50 characters
 - Unique within the template (enforced at DB level with UNIQUE constraint on `(templateId, rowToken)`)
@@ -378,10 +391,12 @@ The `rowToken` is the row's identifier within the formula namespace. It is UPPER
 - The UI must enforce this: if the token is referenced anywhere, the `rowToken` field becomes read-only in the edit form. Show a small badge: `"Used in 2 formulas"`
 
 ### How the Token Is Used
+
 - In other rows' `formulaRaw`: `"{{ROW_PORT_DUES}} * 0.05"` — references the `totalValue` of the PORT_DUES row
 - In `subDescription` or `label`: `"5% of {{$ROW_PORT_DUES}}"` — shows the resolved value
 
 ### Auto-Suggestion
+
 When an admin types a label ("Port Dues"), the UI auto-suggests a token ("PORT_DUES"). The admin can override this before saving. Once saved and referenced, it locks.
 
 ---
@@ -394,11 +409,13 @@ Every row (except `grand_total`) belongs to a section via `sectionId`. Sections 
 3. The target for `section_aggregate` rows
 
 ### The `SECTION_{sectionToken}_SUM` Token
+
 When a section named "Port Mandatory Costs" has `sectionToken = 'PORT_COSTS'`, the token `{{SECTION_PORT_COSTS_SUM}}` becomes available in any formula in the template. It equals the sum of `totalValue` of all non-`section_aggregate` rows in that section.
 
 This token updates progressively during evaluation — it reflects the running sum as rows are evaluated in topological order.
 
 ### Which Rows Count Toward SECTION_SUM
+
 - `formula` rows: YES, `totalValue` counted
 - `constant` rows: YES
 - `manual` rows: YES (even if value is 0)
@@ -414,6 +431,7 @@ This token updates progressively during evaluation — it reflects the running s
 Understanding this is critical for implementing the math engine and for the UI to show the right states.
 
 ### Step 1: DAG Construction (run at SAVE TIME)
+
 When any row's `formulaRaw` or `surchargeFormula` is saved:
 1. Parse all `{{TOKEN}}` references using regex `/\{\{([A-Z_$][A-Z0-9_]*)\}\}/g`
 2. For each `ROW_X` reference: draw a dependency edge (this row depends on ROW_X's row)
@@ -425,12 +443,14 @@ When any row's `formulaRaw` or `surchargeFormula` is saved:
 8. If valid: cache the topological order (not stored, recomputed at preview/generate)
 
 ### Step 2: Token Resolution (run at PREVIEW/GENERATE TIME)
+
 Build the initial scope `Record<tokenKey, BigNumber>`:
 - `CAT_*`: `SELECT ec.tokenKey, COALESCE(SUM(e.amount), 0) FROM expense_categories ec LEFT JOIN expenses e ON e.categoryId = ec.id AND e.projectId = ? GROUP BY ec.tokenKey`
 - `ORG_*`: `SELECT configKey, configValue FROM organization_configs WHERE orgId = ? AND isFormulaInjectable = true`
 - `FILE_*`: read from `projects.customFields` and direct columns per `template_header_fields` config
 
 ### Step 3: Sequential AST Evaluation (run at PREVIEW/GENERATE TIME)
+
 For each row in topological order:
 1. Resolve all `{{TOKEN}}` in `formulaRaw` from the current scope
 2. Evaluate `formulaRaw` with mathjs BigNumber → `baseValue`
@@ -441,6 +461,7 @@ For each row in topological order:
 7. Update scope: `SECTION_{sectionToken}_SUM = current sectionSums[sectionId]`
 
 ### Step 4: Text Interpolation (run at PREVIEW/GENERATE TIME, after step 3)
+
 For each row:
 1. Run text interpolator on `label`, `subDescription`, `surchargeLabel`
 2. Replace `{{$TOKEN}}` with formatted resolved values from scope
@@ -647,14 +668,14 @@ When a component is `formula` type, the component row expands:
 
 Each row card shows one of these states:
 
-| State | Visual | When |
-|---|---|---|
-| Valid | Green check badge | Formula evaluates correctly with test data |
-| Warning | Yellow badge | No test project selected, cannot verify |
-| Error — Token | Red badge "Unknown token: {{CAT_PILOTAGE}}" | Token not found in any namespace |
-| Error — Cycle | Red badge "Circular reference: ROW_X → ROW_Y → ROW_X" | DAG cycle detected |
-| Error — Syntax | Red badge "Invalid formula syntax" | mathjs cannot parse |
-| Untested | Gray badge | Row is constant/manual — no formula to validate |
+| State          | Visual                                                | When                                            |
+| -------------- | ----------------------------------------------------- | ----------------------------------------------- |
+| Valid          | Green check badge                                     | Formula evaluates correctly with test data      |
+| Warning        | Yellow badge                                          | No test project selected, cannot verify         |
+| Error — Token  | Red badge "Unknown token: {{CAT_PILOTAGE}}"           | Token not found in any namespace                |
+| Error — Cycle  | Red badge "Circular reference: ROW_X → ROW_Y → ROW_X" | DAG cycle detected                              |
+| Error — Syntax | Red badge "Invalid formula syntax"                    | mathjs cannot parse                             |
+| Untested       | Gray badge                                            | Row is constant/manual — no formula to validate |
 
 The `[Save Row]` button is always enabled. Validation errors are shown as warnings, not blockers. This allows admins to work on complex templates over time, saving partial work. However, the preview panel will show the error clearly, and the generate endpoint will refuse to proceed if any errors exist.
 

@@ -106,7 +106,7 @@ export default function LandingPage() {
                 <span className="relative flex w-full justify-center overflow-hidden text-center h-[1.2em] text-primary">
                   {titles.map((title, index) => (
                     <motion.span
-                      key={index}
+                      key={title}
                       className="absolute font-semibold"
                       initial={{ opacity: 0, y: 50, filter: "blur(4px)" }}
                       animate={

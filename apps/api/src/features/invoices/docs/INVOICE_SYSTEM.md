@@ -13,11 +13,11 @@ The invoice system enables billing managers to design reusable invoice **templat
 
 There are **three distinct phases** with separate data surfaces:
 
-| Phase | Surface | Who | Where |
-|---|---|---|---|
-| **Template Design** | Master template structure | Admin / Billing Manager | `/org-admin/invoice-templates/[id]` |
-| **Draft Editing** | Per-project draft copy | Manager / Staff | `/dashboard/invoices/drafts/[id]` |
-| **Finalized Invoice** | Immutable, frozen snapshot | Billing records | `/dashboard/invoices` |
+| Phase                 | Surface                    | Who                     | Where                               |
+| --------------------- | -------------------------- | ----------------------- | ----------------------------------- |
+| **Template Design**   | Master template structure  | Admin / Billing Manager | `/org-admin/invoice-templates/[id]` |
+| **Draft Editing**     | Per-project draft copy     | Manager / Staff         | `/dashboard/invoices/drafts/[id]`   |
+| **Finalized Invoice** | Immutable, frozen snapshot | Billing records         | `/dashboard/invoices`               |
 
 > **Critical Rule:** The master template is NEVER modified by the draft editor. Drafts clone the template structure into `invoice_drafts.draftSections` (JSONB). All edits target that JSONB copy only.
 
@@ -61,84 +61,91 @@ apps/api/src/features/
 ### 3.1 Template Tables (`packages/db/src/schema/invoice-templates.ts`)
 
 #### `invoice_templates`
+
 The master template record. Owns all sections, rows, and charges.
 
-| Column | Type | Notes |
-|---|---|---|
-| `id` | text PK | nanoid |
-| `organization_id` | text FK | Cascade delete |
-| `name` | text | Display name |
-| `description` | text | Optional |
-| `document_type` | text FK | → `invoice_types.id` |
-| `scope` | enum | `organization` \| `project` |
-| `currency` | text | Default `USD` |
-| `version` | integer | Template version number |
-| `is_archived` | boolean | Soft delete |
-| `source_template_id` | text self-FK | For cloning/deriving |
+| Column               | Type         | Notes                       |
+| -------------------- | ------------ | --------------------------- |
+| `id`                 | text PK      | nanoid                      |
+| `organization_id`    | text FK      | Cascade delete              |
+| `name`               | text         | Display name                |
+| `description`        | text         | Optional                    |
+| `document_type`      | text FK      | → `invoice_types.id`        |
+| `scope`              | enum         | `organization` \| `project` |
+| `currency`           | text         | Default `USD`               |
+| `version`            | integer      | Template version number     |
+| `is_archived`        | boolean      | Soft delete                 |
+| `source_template_id` | text self-FK | For cloning/deriving        |
 
 #### `template_sections`
+
 Ordered sections within a template (A, B, C… or custom-named).
 
-| Column | Type | Notes |
-|---|---|---|
-| `id` | text PK | |
-| `template_id` | text FK | |
-| `display_name` | text | Optional. If null, UI auto-shows letter |
-| `section_token` | text | **Frozen after creation.** Drives `SEC_<TOKEN>_BASE/TOTAL/CHARGES` tokens. Unique per template. |
-| `sort_order` | integer | |
+| Column          | Type    | Notes                                                                                           |
+| --------------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `id`            | text PK |                                                                                                 |
+| `template_id`   | text FK |                                                                                                 |
+| `display_name`  | text    | Optional. If null, UI auto-shows letter                                                         |
+| `section_token` | text    | **Frozen after creation.** Drives `SEC_<TOKEN>_BASE/TOTAL/CHARGES` tokens. Unique per template. |
+| `sort_order`    | integer |                                                                                                 |
 
 #### `template_rows`
+
 Parent line items within a section.
 
-| Column | Type | Notes |
-|---|---|---|
-| `id` | text PK | |
-| `template_id` | text FK | |
-| `section_id` | text FK | |
-| `parent_label` | text | Group heading label |
-| `row_token` | text | **Globally unique per template.** Drives `<TOKEN>` (base) and `<TOKEN>_TOTAL` (base + charges) tokens. |
-| `value_type` | enum | `normal` = manual entry, `formula` = engine-computed |
-| `formula` | text | Stored as `{{$tok:UUID}}` references. Decoded before evaluation. |
-| `initial_value` | numeric(20,6) | Pre-fill value for manual rows |
+| Column          | Type          | Notes                                                                                                  |
+| --------------- | ------------- | ------------------------------------------------------------------------------------------------------ |
+| `id`            | text PK       |                                                                                                        |
+| `template_id`   | text FK       |                                                                                                        |
+| `section_id`    | text FK       |                                                                                                        |
+| `parent_label`  | text          | Group heading label                                                                                    |
+| `row_token`     | text          | **Globally unique per template.** Drives `<TOKEN>` (base) and `<TOKEN>_TOTAL` (base + charges) tokens. |
+| `value_type`    | enum          | `normal` = manual entry, `formula` = engine-computed                                                   |
+| `formula`       | text          | Stored as `{{$tok:UUID}}` references. Decoded before evaluation.                                       |
+| `initial_value` | numeric(20,6) | Pre-fill value for manual rows                                                                         |
 
 #### `template_row_components`
+
 Sub-line items within a parent row (individual billable items).
 
-| Column | Type | Notes |
-|---|---|---|
-| `component_token` | text | Format: `<ROW_TOKEN>_<LABEL_SNAKECASE>`. Unique per row. |
-| `value_type` | enum | `normal` or `formula` |
-| `formula` | text | Bare token expression |
-| `initial_value` | numeric | Pre-fill value |
+| Column            | Type    | Notes                                                    |
+| ----------------- | ------- | -------------------------------------------------------- |
+| `component_token` | text    | Format: `<ROW_TOKEN>_<LABEL_SNAKECASE>`. Unique per row. |
+| `value_type`      | enum    | `normal` or `formula`                                    |
+| `formula`         | text    | Bare token expression                                    |
+| `initial_value`   | numeric | Pre-fill value                                           |
 
 #### `template_row_charges`
+
 Computed additions bound to a parent row (e.g. 15% VAT on PORT_DUES).
 
-| Column | Type | Notes |
-|---|---|---|
-| `charge_token` | text | Format: `<ROW_TOKEN>_<LABEL_SNAKECASE>`. Unique per row. |
-| `formula` | text | **Must reference parent rowToken as primary operand.** Cross-row refs are rejected by the DAG validator. |
+| Column         | Type | Notes                                                                                                    |
+| -------------- | ---- | -------------------------------------------------------------------------------------------------------- |
+| `charge_token` | text | Format: `<ROW_TOKEN>_<LABEL_SNAKECASE>`. Unique per row.                                                 |
+| `formula`      | text | **Must reference parent rowToken as primary operand.** Cross-row refs are rejected by the DAG validator. |
 
 #### `template_section_charges`
+
 Computed additions bound to a section (e.g. 10% levy on section BASE).
 
-| Column | Type | Notes |
-|---|---|---|
-| `charge_token` | text | Format: `SEC_<SECTION_TOKEN>_<LABEL_SNAKECASE>` |
+| Column         | Type | Notes                                                           |
+| -------------- | ---- | --------------------------------------------------------------- |
+| `charge_token` | text | Format: `SEC_<SECTION_TOKEN>_<LABEL_SNAKECASE>`                 |
 | `formula_base` | enum | `BASE` \| `TOTAL` \| `CHARGES` — which section aggregate to use |
-| `formula_rest` | text | Remainder of expression, e.g. `* 0.10` |
+| `formula_rest` | text | Remainder of expression, e.g. `* 0.10`                          |
 
 Full formula at eval time: `SEC_<SECTION_TOKEN>_<formulaBase> <formulaRest>`
 
 #### `template_header_fields`
+
 Fields displayed above the invoice table (vessel name, GRT, cargo, etc.)
 
-| Column | Type | Notes |
-|---|---|---|
-| `field_type` | enum | Determines UI input type |
-| `file_field_key` | text | Maps to `project.customFields.*` for auto-population |
+| Column                  | Type    | Notes                                                                         |
+| ----------------------- | ------- | ----------------------------------------------------------------------------- |
+| `field_type`            | enum    | Determines UI input type                                                      |
+| `file_field_key`        | text    | Maps to `project.customFields.*` for auto-population                          |
 | `is_formula_injectable` | boolean | When `true`, numeric value becomes a `FILE_*` token available to row formulas |
-| `org_config_key` | text | Maps to `org_settings` for org-level defaults |
+| `org_config_key`        | text    | Maps to `org_settings` for org-level defaults                                 |
 
 ### 3.2 Invoice Tables (`packages/db/src/schema/invoices.ts`)
 
@@ -155,18 +162,18 @@ Tokens are string identifiers that serve as variables in formula expressions. Al
 
 ### 4.1 Token Types & Naming Convention
 
-| Token Type | Format | Example | Value |
-|---|---|---|---|
-| Row base | `<ROW_TOKEN>` | `PORT_DUES` | Sum of all components (no charges) |
-| Row total | `<ROW_TOKEN>_TOTAL` | `PORT_DUES_TOTAL` | base + all row charges |
-| Component | `<ROW_TOKEN>_<LABEL>` | `PORT_DUES_ARRIVAL` | Individual line item value |
-| Row charge | `<ROW_TOKEN>_<CHARGE_LABEL>` | `PORT_DUES_VAT_15` | Computed charge on a row |
-| Section base | `SEC_<SECTION_TOKEN>_BASE` | `SEC_A_BASE` | Sum of all row bases in section |
-| Section total | `SEC_<SECTION_TOKEN>_TOTAL` | `SEC_A_TOTAL` | Section base + row charges + section charges |
-| Section charges sum | `SEC_<SECTION_TOKEN>_CHARGES` | `SEC_A_CHARGES` | Sum of section charges only |
-| File field | `FILE_<FIELD_KEY_UPPER>` | `FILE_GRT` | Resolved from project custom field |
-| Org config | `CAT_<CONFIG_KEY_UPPER>` | `CAT_PORT_TARIFF_RATE` | Resolved from org settings |
-| Template constant | `<CONSTANT_TOKEN>` | `BASE_RATE` | Fixed value defined per template |
+| Token Type          | Format                        | Example                | Value                                        |
+| ------------------- | ----------------------------- | ---------------------- | -------------------------------------------- |
+| Row base            | `<ROW_TOKEN>`                 | `PORT_DUES`            | Sum of all components (no charges)           |
+| Row total           | `<ROW_TOKEN>_TOTAL`           | `PORT_DUES_TOTAL`      | base + all row charges                       |
+| Component           | `<ROW_TOKEN>_<LABEL>`         | `PORT_DUES_ARRIVAL`    | Individual line item value                   |
+| Row charge          | `<ROW_TOKEN>_<CHARGE_LABEL>`  | `PORT_DUES_VAT_15`     | Computed charge on a row                     |
+| Section base        | `SEC_<SECTION_TOKEN>_BASE`    | `SEC_A_BASE`           | Sum of all row bases in section              |
+| Section total       | `SEC_<SECTION_TOKEN>_TOTAL`   | `SEC_A_TOTAL`          | Section base + row charges + section charges |
+| Section charges sum | `SEC_<SECTION_TOKEN>_CHARGES` | `SEC_A_CHARGES`        | Sum of section charges only                  |
+| File field          | `FILE_<FIELD_KEY_UPPER>`      | `FILE_GRT`             | Resolved from project custom field           |
+| Org config          | `CAT_<CONFIG_KEY_UPPER>`      | `CAT_PORT_TARIFF_RATE` | Resolved from org settings                   |
+| Template constant   | `<CONSTANT_TOKEN>`            | `BASE_RATE`            | Fixed value defined per template             |
 
 ### 4.2 Formula Storage Format
 
@@ -204,9 +211,9 @@ TokenResolver → DagValidator → AstEvaluator
 ```
 
 **1. `token-resolver.service.ts`** — Builds `scope: Record<string, string>` (all values are BigNumber fixed(6) strings like `"4200.000000"`):
-- **CAT_* tokens**: Zero-initializes ALL org expense categories, then overrides with actual SUM of `expenses.amount` per category for the given `projectId`. Categories with no expenses remain 0 (safe for formulas).
-- **ORG_* tokens**: Fetches `organization_configs` WHERE `isFormulaInjectable=true`.
-- **FILE_* tokens**: Resolves injectable header fields with priority: manual override > project direct column > `project.customFields[fileFieldKey]` > `defaultManualValue` > 0. Also injects ALL numeric project custom fields as three aliases: bare key, UPPERCASE key, and `FILE_<key>`.
+- _*CAT_* tokens_*: Zero-initializes ALL org expense categories, then overrides with actual SUM of `expenses.amount` per category for the given `projectId`. Categories with no expenses remain 0 (safe for formulas).
+- _*ORG_* tokens_*: Fetches `organization_configs` WHERE `isFormulaInjectable=true`.
+- _*FILE_* tokens_*: Resolves injectable header fields with priority: manual override > project direct column > `project.customFields[fileFieldKey]` > `defaultManualValue` > 0. Also injects ALL numeric project custom fields as three aliases: bare key, UPPERCASE key, and `FILE_<key>`.
 
 **2. `dag-validator.service.ts`** — Uses mathjs (BigNumber mode, precision 20):
 - Detects **duplicate tokens** across all rows/charges (validation aborts early on duplicates)
@@ -247,19 +254,19 @@ Within each row, the engine MUST follow this order:
 
 ### 5.3 Engine Error Codes
 
-| Code | Meaning |
-|---|---|
-| `TOKEN_NOT_FOUND` | A formula references a token that doesn't exist in the template |
-| `CIRCULAR_DEPENDENCY` | Formula A references B which references A |
-| `FORWARD_REFERENCE` | Row A references Row B which appears later in sort order |
-| `UNRESOLVED_REFERENCE` | Token exists but had no value at eval time — zero-filled, soft warning only |
-| `CHARGE_SCOPE_VIOLATION` | A row/section charge references a forbidden token |
-| `DIVISION_BY_ZERO` | Formula results in division by zero |
-| `EVALUATION_FAILED` | General evaluation error |
-| `NEGATIVE_VALUE_NOT_ALLOWED` | Result is negative where not permitted |
-| `INVALID_FORMULA_SYNTAX` | Formula cannot be parsed |
-| `DUPLICATE_TOKEN` | Two rows/charges share the same token |
-| `REORDER_VIOLATION` | Proposed reorder would create a forward reference |
+| Code                         | Meaning                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `TOKEN_NOT_FOUND`            | A formula references a token that doesn't exist in the template             |
+| `CIRCULAR_DEPENDENCY`        | Formula A references B which references A                                   |
+| `FORWARD_REFERENCE`          | Row A references Row B which appears later in sort order                    |
+| `UNRESOLVED_REFERENCE`       | Token exists but had no value at eval time — zero-filled, soft warning only |
+| `CHARGE_SCOPE_VIOLATION`     | A row/section charge references a forbidden token                           |
+| `DIVISION_BY_ZERO`           | Formula results in division by zero                                         |
+| `EVALUATION_FAILED`          | General evaluation error                                                    |
+| `NEGATIVE_VALUE_NOT_ALLOWED` | Result is negative where not permitted                                      |
+| `INVALID_FORMULA_SYNTAX`     | Formula cannot be parsed                                                    |
+| `DUPLICATE_TOKEN`            | Two rows/charges share the same token                                       |
+| `REORDER_VIOLATION`          | Proposed reorder would create a forward reference                           |
 
 ---
 
@@ -269,71 +276,71 @@ All routes are mounted under `/api` (see `invoices.route.ts` and `invoice-templa
 
 ### 6.1 Template Management (`/api/invoice-templates`)
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/invoice-templates` | List all templates for org |
-| `POST` | `/api/invoice-templates` | Create new template |
-| `GET` | `/api/invoice-templates/:id` | Get template with sections/rows/charges |
-| `PATCH` | `/api/invoice-templates/:id` | Update template metadata |
-| `DELETE` | `/api/invoice-templates/:id` | Archive/delete template |
-| `POST` | `/api/invoice-templates/:id/sections` | Add section |
-| `PATCH` | `/api/invoice-templates/:id/sections/:sectionId` | Update section |
-| `DELETE` | `/api/invoice-templates/:id/sections/:sectionId` | Delete section |
-| `POST` | `/api/invoice-templates/:id/sections/:sectionId/rows` | Add row to section |
-| `PATCH` | `/api/invoice-templates/:id/sections/:sectionId/rows/:rowId` | Update row |
-| `DELETE` | `/api/invoice-templates/:id/sections/:sectionId/rows/:rowId` | Delete row |
-| `POST` | `...rows/:rowId/charges` | Add row charge |
-| `PATCH` | `...rows/:rowId/charges/:chargeId` | Update row charge |
-| `DELETE` | `...rows/:rowId/charges/:chargeId` | Delete row charge |
-| `POST` | `...sections/:sectionId/section-charges` | Add section charge |
-| `PATCH` | `...sections/:sectionId/section-charges/:chargeId` | Update section charge |
-| `DELETE` | `...sections/:sectionId/section-charges/:chargeId` | Delete section charge |
-| `POST` | `/api/invoice-templates/:id/constants` | Add template constant |
-| `POST` | `/api/invoice-templates/:id/header-fields` | Add header field |
+| Method   | Path                                                         | Description                             |
+| -------- | ------------------------------------------------------------ | --------------------------------------- |
+| `GET`    | `/api/invoice-templates`                                     | List all templates for org              |
+| `POST`   | `/api/invoice-templates`                                     | Create new template                     |
+| `GET`    | `/api/invoice-templates/:id`                                 | Get template with sections/rows/charges |
+| `PATCH`  | `/api/invoice-templates/:id`                                 | Update template metadata                |
+| `DELETE` | `/api/invoice-templates/:id`                                 | Archive/delete template                 |
+| `POST`   | `/api/invoice-templates/:id/sections`                        | Add section                             |
+| `PATCH`  | `/api/invoice-templates/:id/sections/:sectionId`             | Update section                          |
+| `DELETE` | `/api/invoice-templates/:id/sections/:sectionId`             | Delete section                          |
+| `POST`   | `/api/invoice-templates/:id/sections/:sectionId/rows`        | Add row to section                      |
+| `PATCH`  | `/api/invoice-templates/:id/sections/:sectionId/rows/:rowId` | Update row                              |
+| `DELETE` | `/api/invoice-templates/:id/sections/:sectionId/rows/:rowId` | Delete row                              |
+| `POST`   | `...rows/:rowId/charges`                                     | Add row charge                          |
+| `PATCH`  | `...rows/:rowId/charges/:chargeId`                           | Update row charge                       |
+| `DELETE` | `...rows/:rowId/charges/:chargeId`                           | Delete row charge                       |
+| `POST`   | `...sections/:sectionId/section-charges`                     | Add section charge                      |
+| `PATCH`  | `...sections/:sectionId/section-charges/:chargeId`           | Update section charge                   |
+| `DELETE` | `...sections/:sectionId/section-charges/:chargeId`           | Delete section charge                   |
+| `POST`   | `/api/invoice-templates/:id/constants`                       | Add template constant                   |
+| `POST`   | `/api/invoice-templates/:id/header-fields`                   | Add header field                        |
 
 ### 6.2 Invoice Drafts (`/api/invoices/drafts`)
 
-| Method | Path | Description |
-|---|---|---|
-| `PUT` | `/api/invoices/drafts` | Upsert draft for `{projectId, sourceTemplateId}` |
-| `GET` | `/api/invoices/drafts/:id` | Get draft with resolved preview |
-| `PATCH` | `/api/invoices/drafts/:id` | Save draft edits (draftSections, header overrides) |
-| `DELETE` | `/api/invoices/drafts/:id` | Delete draft |
+| Method   | Path                       | Description                                        |
+| -------- | -------------------------- | -------------------------------------------------- |
+| `PUT`    | `/api/invoices/drafts`     | Upsert draft for `{projectId, sourceTemplateId}`   |
+| `GET`    | `/api/invoices/drafts/:id` | Get draft with resolved preview                    |
+| `PATCH`  | `/api/invoices/drafts/:id` | Save draft edits (draftSections, header overrides) |
+| `DELETE` | `/api/invoices/drafts/:id` | Delete draft                                       |
 
 ### 6.3 Invoice Engine (`/api/invoices/engine`)
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/invoices/engine/preview` | Live preview evaluation — returns `EvaluatedSection[]` + `grandTotal` |
-| `POST` | `/api/invoices/engine/validate` | DAG validation only — returns errors without evaluating |
+| Method | Path                            | Description                                                           |
+| ------ | ------------------------------- | --------------------------------------------------------------------- |
+| `POST` | `/api/invoices/engine/preview`  | Live preview evaluation — returns `EvaluatedSection[]` + `grandTotal` |
+| `POST` | `/api/invoices/engine/validate` | DAG validation only — returns errors without evaluating               |
 
 ### 6.4 Finalized Invoices (`/api/invoices`)
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/invoices` | List finalized invoices |
-| `GET` | `/api/invoices/:id` | Get invoice with line items |
-| `POST` | `/api/invoices/generate` | Finalize draft → invoice (deletes draft) |
-| `PATCH` | `/api/invoices/:id` | Update invoice status |
+| Method  | Path                     | Description                              |
+| ------- | ------------------------ | ---------------------------------------- |
+| `GET`   | `/api/invoices`          | List finalized invoices                  |
+| `GET`   | `/api/invoices/:id`      | Get invoice with line items              |
+| `POST`  | `/api/invoices/generate` | Finalize draft → invoice (deletes draft) |
+| `PATCH` | `/api/invoices/:id`      | Update invoice status                    |
 
 ---
 
 ## 7. Permission Guards
 
-| Action | Required Permission |
-|---|---|
-| View invoices list | `invoice:view` |
-| Generate invoice / create draft | `invoice:create_draft` |
-| View draft page | `invoice:view` |
-| Fill manual rates & quantities | `invoice:fill_values` |
-| Customize line item labels | `invoice:edit_line_labels` |
-| Manage optional service items | `invoice:manage_optional_rows` |
-| Author formulas in draft builder | `invoice:author_formulas` |
-| Finalize invoice (Ready to Bill) | `invoice:finalize` |
-| Revert invoice to draft | `invoice:revert` |
-| Void invoice | `invoice:void` |
-| Delete draft | `invoice:delete` |
-| Manage templates | `template:edit` / `template:create` |
+| Action                           | Required Permission                 |
+| -------------------------------- | ----------------------------------- |
+| View invoices list               | `invoice:view`                      |
+| Generate invoice / create draft  | `invoice:create_draft`              |
+| View draft page                  | `invoice:view`                      |
+| Fill manual rates & quantities   | `invoice:fill_values`               |
+| Customize line item labels       | `invoice:edit_line_labels`          |
+| Manage optional service items    | `invoice:manage_optional_rows`      |
+| Author formulas in draft builder | `invoice:author_formulas`           |
+| Finalize invoice (Ready to Bill) | `invoice:finalize`                  |
+| Revert invoice to draft          | `invoice:revert`                    |
+| Void invoice                     | `invoice:void`                      |
+| Delete draft                     | `invoice:delete`                    |
+| Manage templates                 | `template:edit` / `template:create` |
 
 ---
 

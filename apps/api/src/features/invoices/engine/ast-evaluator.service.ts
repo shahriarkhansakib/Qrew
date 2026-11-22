@@ -164,9 +164,10 @@ function evalFormula(
   let resolvedFormula = formula;
   if (noticeCollector !== undefined) {
     const unknownTokens = new Set<string>();
-    let m: RegExpExecArray | null;
     TOKEN_RE.lastIndex = 0;
-    while ((m = TOKEN_RE.exec(formula)) !== null) {
+    while (true) {
+      const m = TOKEN_RE.exec(formula);
+      if (!m) break;
       const tok = m[1];
       if (MATH_FUNCTION_NAMES.has(tok)) continue;
       if (!(tok in scope)) unknownTokens.add(tok);

@@ -33,7 +33,7 @@ async function updateDraft(
   c?: Context,
   action: string = "Edited draft",
 ) {
-  let updatedHistory;
+  let updatedHistory: any;
   if (c) {
     const user = c.get("user") as any;
     const organizationId = c.get("organizationId");

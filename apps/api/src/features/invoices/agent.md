@@ -1,4 +1,5 @@
 # INVOICE ENGINE — BACKEND AGENT CONSTITUTION
+
 **Location:** `apps/api/src/features/invoices/AGENT.md`
 **Version:** 1.0 | **Status:** Binding Architectural Contract
 **Read every section before writing a single line of code. No exceptions.**
@@ -99,6 +100,7 @@ packages/db/src/schema/
 ## 3. System Overview — The Formula-Driven Invoice Engine
 
 ### The 4-Table Hybrid Architecture
+
 ```
 INTENT (Templates — mutable, defines the rules):
   invoice_templates      → the container (name, scope, document type)
@@ -112,6 +114,7 @@ EXECUTION (Snapshots — immutable once frozen, legally binding):
 ```
 
 ### The 5 Non-Negotiable Goals
+
 1. **Industry-Agnostic**: No hardcoded domain concepts. All rows are defined by admins dynamically.
 2. **Automated Expense Bridge**: `{{CAT_TRANSPORT}}` automatically pulls `SUM(expenses) WHERE category.tokenKey = 'TRANSPORT'`.
 3. **Excel-Like Formula Engine**: Sequential AST evaluation with a scope dictionary. Row A can reference Row B's result if B evaluates first.
@@ -124,43 +127,43 @@ EXECUTION (Snapshots — immutable once frozen, legally binding):
 
 ```typescript
 // template_scope_enum
-'organization'    // Admin-created, official company format, cannot be edited by staff
-'preset'          // Staff-forked, personal reuse format
+"organization"; // Admin-created, official company format, cannot be edited by staff
+"preset"; // Staff-forked, personal reuse format
 
 // row_type_enum
-'formula'         // Value computed from formulaRaw token expression
-'constant'        // Admin-set fixed numeric value, pre-filled on every invoice
-'manual'          // Empty on creation, staff inputs value per invoice
-'section_aggregate' // Applies a formula to the SUM of all non-aggregate rows in a target section
-'multi_value'     // One logical row with multiple sub-components (each has own formula/value)
-'header_label'    // Non-calculating label row for visual section headers in the PDF
-'grand_total'     // Special row: sums all sectionSums or specified rows
+"formula"; // Value computed from formulaRaw token expression
+"constant"; // Admin-set fixed numeric value, pre-filled on every invoice
+"manual"; // Empty on creation, staff inputs value per invoice
+"section_aggregate"; // Applies a formula to the SUM of all non-aggregate rows in a target section
+"multi_value"; // One logical row with multiple sub-components (each has own formula/value)
+"header_label"; // Non-calculating label row for visual section headers in the PDF
+"grand_total"; // Special row: sums all sectionSums or specified rows
 
 // header_field_type_enum
-'file_field'      // Value comes from projects table or projects.customFields
-'org_constant'    // Value comes from organization_configs, same for every invoice
-'manual'          // Staff fills this in per invoice (ETA, cargo quantity, etc.)
+"file_field"; // Value comes from projects table or projects.customFields
+"org_constant"; // Value comes from organization_configs, same for every invoice
+"manual"; // Staff fills this in per invoice (ETA, cargo quantity, etc.)
 
 // invoice_status_enum (REPLACES existing)
-'draft'           // Being built, can be mutated
-'frozen'          // Mathematically locked, historicalFormat written
-'issued'          // Sent to client (PDF generated and sent)
-'paid'            // Payment received
-'void'            // Cancelled, documentNumber retired
-'disputed'        // Under dispute, frozen but flagged
+"draft"; // Being built, can be mutated
+"frozen"; // Mathematically locked, historicalFormat written
+"issued"; // Sent to client (PDF generated and sent)
+"paid"; // Payment received
+"void"; // Cancelled, documentNumber retired
+"disputed"; // Under dispute, frozen but flagged
 
 // document_type_enum
-'general'         // General purpose invoice
-'standard'        // Standard commercial invoice
-'retainer'        // Retainer / recurring invoice
-'proforma'        // Proforma invoice
-'credit_note'     // Credit note adjustment
+"general"; // General purpose invoice
+"standard"; // Standard commercial invoice
+"retainer"; // Retainer / recurring invoice
+"proforma"; // Proforma invoice
+"credit_note"; // Credit note adjustment
 
 // config_value_type_enum
-'number'          // Plain numeric (e.g., exchange rate: 121.20)
-'percentage'      // Decimal stored, displays as % (e.g., VAT rate: 0.15 → displays "15%")
-'currency_rate'   // Exchange rate (enforces: must be > 0)
-'text'            // Text value, NOT injectable into formulas
+"number"; // Plain numeric (e.g., exchange rate: 121.20)
+"percentage"; // Decimal stored, displays as % (e.g., VAT rate: 0.15 → displays "15%")
+"currency_rate"; // Exchange rate (enforces: must be > 0)
+"text"; // Text value, NOT injectable into formulas
 ```
 
 ---
@@ -168,6 +171,7 @@ EXECUTION (Snapshots — immutable once frozen, legally binding):
 ## 5. Complete Database Schema Specification
 
 ### 5.1 `organization_configs`
+
 Stores ORG_* formula tokens and org-wide constants.
 ```
 id:                  text PK, defaultFn: randomUUID()
@@ -186,6 +190,7 @@ INDEX: (organizationId, isFormulaInjectable)
 ```
 
 ### 5.2 `invoice_pdf_layouts`
+
 Per-organization PDF document branding and format configuration. One row per org.
 ```
 id:                    text PK, defaultFn: randomUUID()
@@ -213,6 +218,7 @@ updatedAt:             timestamp NOT NULL DEFAULT now(), $onUpdate
 ```
 
 ### 5.3 `invoice_document_sequences`
+
 Tracks per-organization file sequence. One row per org. Locked on every file creation.
 ```
 id:             text PK, defaultFn: randomUUID()
@@ -223,6 +229,7 @@ updatedAt:      timestamp NOT NULL DEFAULT now(), $onUpdate
 ```
 
 ### 5.4 `invoice_reserved_numbers`
+
 Pre-generated document numbers reserved at project/file creation time.
 ```
 id:             text PK, defaultFn: randomUUID()
@@ -239,6 +246,7 @@ INDEX: (organizationId, projectId)
 ```
 
 ### 5.5 `invoice_templates`
+
 The template header. Container for sections and rows.
 ```
 id:                   text PK, defaultFn: randomUUID()
@@ -261,6 +269,7 @@ INDEX: (organizationId, documentType)
 ```
 
 ### 5.6 `template_sections`
+
 Named groupings of rows within a template. Each section gets a computable SUM token.
 ```
 id:            text PK, defaultFn: randomUUID()
@@ -277,6 +286,7 @@ INDEX: (templateId, sortOrder)
 ```
 
 ### 5.7 `template_rows`
+
 Individual rows within sections. The core formula unit.
 ```
 id:                        text PK, defaultFn: randomUUID()
@@ -328,6 +338,7 @@ INDEX: (templateId, sortOrder)
 ```
 
 ### 5.8 `template_header_fields`
+
 The invoice header configuration. Defines what appears in the header block of the PDF.
 ```
 id:                text PK, defaultFn: randomUUID()
@@ -355,6 +366,7 @@ INDEX: (templateId, sortOrder)
 ```
 
 ### 5.9 `invoice_drafts`
+
 Auto-save scratchpad. One per user per project. Deleted on successful freeze.
 ```
 id:                    text PK, defaultFn: randomUUID()
@@ -376,6 +388,7 @@ INDEX: (organizationId, projectId)
 ```
 
 ### 5.10 `invoices` — FULL REPLACEMENT OF EXISTING TABLE
+
 ```
 id:                     text PK, defaultFn: randomUUID()
 organizationId:         text NOT NULL, FK → organizations.id, onDelete: restrict
@@ -418,6 +431,7 @@ INDEX: (organizationId, createdAt DESC)
 ```
 
 ### 5.11 `invoice_line_items` — FULL REPLACEMENT OF EXISTING TABLE
+
 ```
 id:                        text PK, defaultFn: randomUUID()
 invoiceId:                 text NOT NULL, FK → invoices.id, onDelete: cascade
@@ -453,50 +467,50 @@ Define these in `apps/api/src/features/invoices/engine/engine.types.ts`. Every J
 // HistoricalFormatV1 — stored in invoices.historicalFormat
 // The formula structure exactly as it existed at freeze time
 export interface HistoricalFormatV1 {
-  schemaVersion: '1.0'
-  templateId: string
-  templateVersion: number
-  templateName: string
+  schemaVersion: "1.0";
+  templateId: string;
+  templateVersion: number;
+  templateName: string;
   sections: Array<{
-    id: string
-    name: string
-    sectionToken: string
-    sortOrder: number
+    id: string;
+    name: string;
+    sectionToken: string;
+    sortOrder: number;
     rows: Array<{
-      id: string
-      rowToken: string
-      rowType: RowType
-      label: string
-      subDescription?: string
-      surchargeLabel?: string
-      qualifier?: string
-      formulaRaw?: string
-      surchargeFormula?: string
-      constantValue?: string   // BigNumber serialized as string
-      subComponents?: SubComponentV1[]
-      aggregateTargetSectionId?: string
-      isVisible: boolean
-      sortOrder: number
-    }>
-  }>
+      id: string;
+      rowToken: string;
+      rowType: RowType;
+      label: string;
+      subDescription?: string;
+      surchargeLabel?: string;
+      qualifier?: string;
+      formulaRaw?: string;
+      surchargeFormula?: string;
+      constantValue?: string; // BigNumber serialized as string
+      subComponents?: SubComponentV1[];
+      aggregateTargetSectionId?: string;
+      isVisible: boolean;
+      sortOrder: number;
+    }>;
+  }>;
   headerFields: Array<{
-    id: string
-    fieldType: HeaderFieldType
-    label: string
-    fileFieldKey?: string
-    orgConfigKey?: string
-    columnPosition: 'left' | 'right'
-    sortOrder: number
-  }>
+    id: string;
+    fieldType: HeaderFieldType;
+    label: string;
+    fileFieldKey?: string;
+    orgConfigKey?: string;
+    columnPosition: "left" | "right";
+    sortOrder: number;
+  }>;
 }
 
 // ResolvedScopeV1 — stored in invoices.resolvedScope
 // Every token and its exact resolved value at freeze time
 export interface ResolvedScopeV1 {
-  schemaVersion: '1.0'
-  resolvedAt: string              // ISO timestamp
-  projectId: string
-  tokens: Record<string, string>  // token key → BigNumber serialized as string
+  schemaVersion: "1.0";
+  resolvedAt: string; // ISO timestamp
+  projectId: string;
+  tokens: Record<string, string>; // token key → BigNumber serialized as string
   // Examples:
   // "CAT_TRANSPORT": "4200.000000"
   // "ORG_VAT_RATE": "0.150000"
@@ -507,108 +521,108 @@ export interface ResolvedScopeV1 {
 
 // DraftSectionV1 — stored in invoice_drafts.draftSections
 export interface DraftSectionV1 {
-  id: string
-  name: string
-  sectionToken: string
-  sortOrder: number
-  rows: DraftRowV1[]
+  id: string;
+  name: string;
+  sectionToken: string;
+  sortOrder: number;
+  rows: DraftRowV1[];
 }
 
 export interface DraftRowV1 {
-  id: string
-  rowToken: string
-  rowType: RowType
-  label: string
-  subDescription?: string
-  surchargeLabel?: string
-  qualifier?: string
-  formulaRaw?: string
-  surchargeFormula?: string
-  overriddenValue?: string   // if staff changed a constant/formula
-  subComponents?: SubComponentV1[]
-  aggregateTargetSectionId?: string
-  isVisible: boolean
-  sortOrder: number
+  id: string;
+  rowToken: string;
+  rowType: RowType;
+  label: string;
+  subDescription?: string;
+  surchargeLabel?: string;
+  qualifier?: string;
+  formulaRaw?: string;
+  surchargeFormula?: string;
+  overriddenValue?: string; // if staff changed a constant/formula
+  subComponents?: SubComponentV1[];
+  aggregateTargetSectionId?: string;
+  isVisible: boolean;
+  sortOrder: number;
 }
 
 // SubComponentV1 — stored in template_rows.subComponents & invoice_line_items.subComponentsSnapshot
 export interface SubComponentV1 {
-  id: string                       // uuid, stable across saves
-  label: string
-  formulaRaw?: string              // e.g., "{{FILE_GRT}} * 0.306"
-  constantValue?: string           // BigNumber as string
-  isManual: boolean                // true = staff inputs value per invoice
-  manualValue?: string             // the value staff entered (in draft and line items)
-  sortOrder: number
+  id: string; // uuid, stable across saves
+  label: string;
+  formulaRaw?: string; // e.g., "{{FILE_GRT}} * 0.306"
+  constantValue?: string; // BigNumber as string
+  isManual: boolean; // true = staff inputs value per invoice
+  manualValue?: string; // the value staff entered (in draft and line items)
+  sortOrder: number;
 }
 
 // BankDetailsV1 — stored in invoice_pdf_layouts.bankDetails
 export interface BankDetailsV1 {
-  companyName: string
-  companyAddress?: string
-  accountNo: string
-  bankName: string
-  bankBIC: string
-  bankBranch?: string
-  bankAddress?: string
-  intermediaryBankName?: string
-  intermediaryAccountNo?: string
-  intermediaryBIC?: string
+  companyName: string;
+  companyAddress?: string;
+  accountNo: string;
+  bankName: string;
+  bankBIC: string;
+  bankBranch?: string;
+  bankAddress?: string;
+  intermediaryBankName?: string;
+  intermediaryAccountNo?: string;
+  intermediaryBIC?: string;
 }
 
 // ExtraSectionV1 — stored in invoice_pdf_layouts.extraSections (array)
 export interface ExtraSectionV1 {
-  id: string
-  title: string
-  rows: Array<{ label: string; value: string }>
+  id: string;
+  title: string;
+  rows: Array<{ label: string; value: string }>;
 }
 
 // FooterBlockV1 — stored in invoice_pdf_layouts.footerBlocks (array)
 export interface FooterBlockV1 {
-  id: string
-  type: 'text' | 'address' | 'contact_line'
-  content: string
+  id: string;
+  type: "text" | "address" | "contact_line";
+  content: string;
 }
 
 // EvaluatedRow — output of the AST Evaluator
 export interface EvaluatedRow {
-  rowToken: string
-  rowType: RowType
-  label: string                    // text interpolation already resolved
-  subDescription?: string
-  surchargeLabel?: string
-  qualifier?: string
-  formulaSnapshot?: string
-  surchargeFormulaSnapshot?: string
-  subComponentsSnapshot?: SubComponentV1[]
-  baseValue: string                // BigNumber as string
-  surchargeValue: string           // BigNumber as string
-  totalValue: string               // BigNumber as string
-  isVisible: boolean
-  displayOrder: number
-  sectionToken?: string
+  rowToken: string;
+  rowType: RowType;
+  label: string; // text interpolation already resolved
+  subDescription?: string;
+  surchargeLabel?: string;
+  qualifier?: string;
+  formulaSnapshot?: string;
+  surchargeFormulaSnapshot?: string;
+  subComponentsSnapshot?: SubComponentV1[];
+  baseValue: string; // BigNumber as string
+  surchargeValue: string; // BigNumber as string
+  totalValue: string; // BigNumber as string
+  isVisible: boolean;
+  displayOrder: number;
+  sectionToken?: string;
 }
 
 // EngineError — thrown by any engine module
 export interface EngineError {
-  code: EngineErrorCode
-  message: string
-  rowToken?: string
-  token?: string
-  formula?: string
-  details?: Record<string, unknown>
+  code: EngineErrorCode;
+  message: string;
+  rowToken?: string;
+  token?: string;
+  formula?: string;
+  details?: Record<string, unknown>;
 }
 
 export type EngineErrorCode =
-  | 'TOKEN_NOT_FOUND'
-  | 'CIRCULAR_DEPENDENCY'
-  | 'FORWARD_REFERENCE'
-  | 'DIVISION_BY_ZERO'
-  | 'EVALUATION_FAILED'
-  | 'NEGATIVE_VALUE_NOT_ALLOWED'
-  | 'INVALID_FORMULA_SYNTAX'
-  | 'SECTION_NOT_FOUND'
-  | 'MULTI_VALUE_COMPONENT_ERROR'
+  | "TOKEN_NOT_FOUND"
+  | "CIRCULAR_DEPENDENCY"
+  | "FORWARD_REFERENCE"
+  | "DIVISION_BY_ZERO"
+  | "EVALUATION_FAILED"
+  | "NEGATIVE_VALUE_NOT_ALLOWED"
+  | "INVALID_FORMULA_SYNTAX"
+  | "SECTION_NOT_FOUND"
+  | "MULTI_VALUE_COMPONENT_ERROR";
 ```
 
 ---
@@ -808,6 +822,7 @@ If called outside a transaction, throw: Error('generateDocumentNumber must be ca
 ## 9. Complete API Endpoint Specification
 
 ### Router Registration
+
 All invoice routes register at `/api` root in `apps/api/src/index.ts`.
 
 ```
@@ -1114,6 +1129,7 @@ stateDiagram-v2
 ```
 
 #### State Transition Matrix & Invariants
+
 1. **Draft Collaboration**: Multiple drafts per project allowed. Any user with `finance:manage_invoices` can edit. Changes logged to `editHistory` with user ID, name, email, action, and timestamp. Consecutive edits within 2 minutes coalesce into one entry.
 2. **Frozen (`Ready to Bill`)**: Finalized snapshot stored. Ready for client issuance or early correction.
 3. **Issued**: Officially transmitted to client. Automated collection/reminders active.
