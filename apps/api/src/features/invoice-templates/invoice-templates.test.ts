@@ -8,7 +8,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { makeCtx, makeTemplate, ORG_ID, TEMPLATE_ID } from "./invoice-templates.fixtures";
+import { makeCtx, makeTemplate, TEMPLATE_ID } from "./invoice-templates.fixtures";
 
 // ─── Mock @starter/db ────────────────────────────────────────────────────────
 vi.mock("@starter/db", () => {
@@ -59,6 +59,7 @@ vi.mock("@starter/db", () => {
       description: "description",
       documentPrefix: "documentPrefix",
       numberingFormat: "numberingFormat",
+      optionalRows: "optionalRows",
     },
     templateHeaderFields: { id: "id", templateId: "templateId" },
     invoiceDocumentSequences: {
@@ -68,10 +69,25 @@ vi.mock("@starter/db", () => {
       templateId: "templateId",
     },
     templateSections: { id: "id", templateId: "templateId" },
+    templateRows: { id: "id", templateId: "templateId", sectionId: "sectionId" },
     customFieldDefinitions: {
       id: "id",
       organizationId: "organizationId",
       entityType: "entityType",
+    },
+    tokens: {
+      id: "id",
+      tokenKey: "tokenKey",
+      label: "label",
+      description: "description",
+      sortOrder: "sortOrder",
+      valueType: "valueType",
+      domain: "domain",
+      entityType: "entityType",
+      isSystem: "isSystem",
+      isInjectable: "isInjectable",
+      isVisible: "isVisible",
+      organizationId: "organizationId",
     },
   };
 });
@@ -164,6 +180,13 @@ describe("InvoiceTemplatesController", () => {
       expect(res.status).toBe(404);
     });
 
+    it("returns 404 when foreign org attempts to access template", async () => {
+      mockSelectReturns([]);
+      const ctx = makeCtx({ orgId: "foreign-org-999", params: { id: TEMPLATE_ID } });
+      const res = await InvoiceTemplatesController.getTemplate(ctx);
+      expect(res.status).toBe(404);
+    });
+
     it("returns the template on happy path", async () => {
       const tpl = makeTemplate();
       mockSelectReturns([tpl]);
@@ -214,6 +237,44 @@ describe("InvoiceTemplatesController", () => {
       expect(res.status).toBe(201);
       expect((res as any).data.documentPrefix).toBe("INV");
     });
+
+    it("creates general template with default columns when templateType is 'general'", async () => {
+      const generalTpl = makeTemplate({
+        templateType: "general",
+        columnDefinitions: [
+          { id: "1", key: "col_serial", label: "SL", dataType: "serial" },
+          { id: "2", key: "col_date", label: "Date", dataType: "date" },
+          { id: "3", key: "col_desc", label: "Description", dataType: "text" },
+          { id: "4", key: "col_amount", label: "Amount", dataType: "number", isTotaled: true },
+        ],
+      });
+      mockSelectReturns([]);
+      mockInsertReturns(generalTpl);
+      const ctx = makeCtx({ body: { name: "Company Expense Sheet", templateType: "general" } });
+      const res = await InvoiceTemplatesController.createTemplate(ctx);
+      expect(res.status).toBe(201);
+      expect((res as any).data.templateType).toBe("general");
+      expect((res as any).data.columnDefinitions).toHaveLength(4);
+    });
+
+    it("creates sheet template with default columns when templateType is 'sheet'", async () => {
+      const sheetTpl = makeTemplate({
+        templateType: "general",
+        columnDefinitions: [
+          { id: "1", key: "col_serial", label: "SL", dataType: "serial" },
+          { id: "2", key: "col_date", label: "Date", dataType: "date" },
+          { id: "3", key: "col_desc", label: "Description", dataType: "text" },
+          { id: "4", key: "col_amount", label: "Amount", dataType: "number", isTotaled: true },
+        ],
+      });
+      mockSelectReturns([]);
+      mockInsertReturns(sheetTpl);
+      const ctx = makeCtx({ body: { name: "Company Expense Sheet", templateType: "sheet" } });
+      const res = await InvoiceTemplatesController.createTemplate(ctx);
+      expect(res.status).toBe(201);
+      expect((res as any).data.templateType).toBe("general");
+      expect((res as any).data.columnDefinitions).toHaveLength(4);
+    });
   });
 
   // ── updateTemplate ────────────────────────────────────────────────────────
@@ -234,6 +295,21 @@ describe("InvoiceTemplatesController", () => {
         returning: vi.fn().mockResolvedValue([]),
       });
       const ctx = makeCtx({ params: { id: TEMPLATE_ID }, body: { name: "New" } });
+      const res = await InvoiceTemplatesController.updateTemplate(ctx);
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 when foreign org attempts to update template", async () => {
+      (db.update as any).mockReturnValue({
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([]),
+      });
+      const ctx = makeCtx({
+        orgId: "foreign-org-999",
+        params: { id: TEMPLATE_ID },
+        body: { name: "New" },
+      });
       const res = await InvoiceTemplatesController.updateTemplate(ctx);
       expect(res.status).toBe(404);
     });
@@ -274,6 +350,16 @@ describe("InvoiceTemplatesController", () => {
       expect(res.status).toBe(404);
     });
 
+    it("returns 404 when foreign org attempts to delete template", async () => {
+      (db.delete as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([]),
+      });
+      const ctx = makeCtx({ orgId: "foreign-org-999", params: { id: TEMPLATE_ID } });
+      const res = await InvoiceTemplatesController.deleteTemplate(ctx);
+      expect(res.status).toBe(404);
+    });
+
     it("deletes template and returns success", async () => {
       const tpl = makeTemplate();
       mockDeleteReturns(tpl);
@@ -281,6 +367,92 @@ describe("InvoiceTemplatesController", () => {
       const res = await InvoiceTemplatesController.deleteTemplate(ctx);
       expect(res.status).toBe(200);
       expect((res as any).data.success).toBe(true);
+    });
+  });
+
+  describe("addOptionalRow", () => {
+    it("returns 401 when organizationId is missing", async () => {
+      const ctx = makeCtx({ orgId: null, params: { id: TEMPLATE_ID } });
+      const res = await InvoiceTemplatesController.addOptionalRow(ctx);
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 404 when template not found", async () => {
+      mockSelectReturns([]);
+      const ctx = makeCtx({ params: { id: TEMPLATE_ID }, body: { rowToken: "CRANE_RENTAL" } });
+      const res = await InvoiceTemplatesController.addOptionalRow(ctx);
+      expect(res.status).toBe(404);
+    });
+
+    it("adds a new optional row when not duplicate", async () => {
+      mockSelectReturns([{ optionalRows: [] }]);
+      const ctx = makeCtx({
+        params: { id: TEMPLATE_ID },
+        body: { rowToken: "CRANE_RENTAL", label: "Crane Rental" },
+      });
+      const res = await InvoiceTemplatesController.addOptionalRow(ctx);
+      expect(res.status).toBe(201);
+      expect((res as any).data.rowToken).toBe("CRANE_RENTAL");
+    });
+
+    it("rejects with 409 conflict when duplicate optional row token exists", async () => {
+      mockSelectReturns([
+        {
+          optionalRows: [
+            { id: "1", rowToken: "CRANE_RENTAL", label: "Crane Rental", valueType: "normal" },
+          ],
+        },
+      ]);
+      const ctx = makeCtx({
+        params: { id: TEMPLATE_ID },
+        body: { rowToken: "CRANE_RENTAL", label: "Crane Rental Second" },
+      });
+      const res = await InvoiceTemplatesController.addOptionalRow(ctx);
+      expect(res.status).toBe(409);
+      expect((res as any).data.error).toContain("already exists");
+    });
+  });
+
+  // ── updateColumns (Custom Sheet Templates) ─────────────────────────────────
+
+  describe("updateColumns", () => {
+    it("updates column definitions for a template", async () => {
+      const updatedTpl = makeTemplate({
+        templateType: "sheet",
+        columnDefinitions: [
+          { id: "col-1", key: "col_date", label: "Date", dataType: "date" },
+          { id: "col-2", key: "col_amount", label: "Amount", dataType: "number", isTotaled: true },
+        ],
+      });
+      mockUpdateReturns(updatedTpl);
+      const ctx = makeCtx({
+        params: { id: TEMPLATE_ID },
+        body: {
+          columnDefinitions: [
+            { id: "col-1", key: "col_date", label: "Date", dataType: "date" },
+            {
+              id: "col-2",
+              key: "col_amount",
+              label: "Amount",
+              dataType: "number",
+              isTotaled: true,
+            },
+          ],
+        },
+      });
+      const res = await InvoiceTemplatesController.updateColumns(ctx);
+      expect(res.status).toBe(200);
+      expect((res as any).data.columnDefinitions).toHaveLength(2);
+      expect((res as any).data.columnDefinitions[1].isTotaled).toBe(true);
+    });
+
+    it("returns 400 when columns payload is invalid", async () => {
+      const ctx = makeCtx({
+        params: { id: TEMPLATE_ID },
+        body: { columnDefinitions: "not-an-array" },
+      });
+      const res = await InvoiceTemplatesController.updateColumns(ctx);
+      expect(res.status).toBe(400);
     });
   });
 });

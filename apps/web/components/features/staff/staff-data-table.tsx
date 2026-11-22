@@ -31,6 +31,7 @@ import {
   FilterableTableHeader,
 } from "@/components/ui/table-filter-components";
 import { useTableCellFilter } from "@/hooks/use-table-cell-filter";
+import { apiUrl } from "@/lib/constants";
 import { EditStaffRoleModal } from "./edit-staff-role-modal";
 
 interface StaffMember {
@@ -58,8 +59,7 @@ interface StaffDataTableProps {
 }
 
 export function StaffDataTable({ isReadOnly = true }: StaffDataTableProps) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-  const router = useRouter();
+  const _router = useRouter();
 
   // State for Edit Modal and AlertDialog
   const [editingMember, setEditingMember] = useState<StaffMember | null>(null);
@@ -150,21 +150,21 @@ export function StaffDataTable({ isReadOnly = true }: StaffDataTableProps) {
               columnKey="user"
               title="User"
               isFiltered={isColumnFiltered("user")}
-              activeValue={filters["user"]}
+              activeValue={filters.user}
               onClear={() => clearColumnFilter("user")}
             />
             <FilterableTableHeader
               columnKey="role"
               title="Office Role"
               isFiltered={isColumnFiltered("role")}
-              activeValue={filters["role"]}
+              activeValue={filters.role}
               onClear={() => clearColumnFilter("role")}
             />
             <FilterableTableHeader
               columnKey="wallet"
               title="Wallet Balance"
               isFiltered={isColumnFiltered("wallet")}
-              activeValue={filters["wallet"]}
+              activeValue={filters.wallet}
               onClear={() => clearColumnFilter("wallet")}
             />
             {!isReadOnly && (
@@ -172,7 +172,7 @@ export function StaffDataTable({ isReadOnly = true }: StaffDataTableProps) {
                 columnKey="joined"
                 title="Joined"
                 isFiltered={isColumnFiltered("joined")}
-                activeValue={filters["joined"]}
+                activeValue={filters.joined}
                 onClear={() => clearColumnFilter("joined")}
               />
             )}

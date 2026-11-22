@@ -1,12 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+import { type AppPermission, PERMISSIONS_CATALOG } from "./permissions-registry";
 import {
   expenseCategories,
-  organizations,
   orgRolePermissions,
   orgRoles,
   projectStatuses,
   projectStatusTransitions,
+  tokens,
 } from "./schema";
 
 export async function seedOrganizationDefaults(db: any, orgId: string, userId: string) {
@@ -17,10 +18,65 @@ export async function seedOrganizationDefaults(db: any, orgId: string, userId: s
     .where(eq(expenseCategories.organizationId, orgId));
 
   if (existingCategories.length === 0) {
+    const totalId = uuidv4();
+    const transId = uuidv4();
+    const officeId = uuidv4();
+    const othersId = uuidv4();
+
+    await db.insert(tokens).values([
+      {
+        id: totalId,
+        tokenKey: "EXP_TOTAL",
+        label: "Total Expenses",
+        description:
+          "Sum of all expense categories recorded across all categories for this project",
+        domain: "expense_category",
+        organizationId: orgId,
+        isSystem: true,
+        isInjectable: true,
+        isVisible: true,
+        sortOrder: 0,
+      },
+      {
+        id: transId,
+        tokenKey: "TRANSPORTATION",
+        label: "Transportation",
+        domain: "expense_category",
+        organizationId: orgId,
+        isSystem: false,
+        isInjectable: true,
+        isVisible: true,
+        sortOrder: 1,
+      },
+      {
+        id: officeId,
+        tokenKey: "OFFICE",
+        label: "Office",
+        domain: "expense_category",
+        organizationId: orgId,
+        isSystem: false,
+        isInjectable: true,
+        isVisible: true,
+        sortOrder: 2,
+      },
+      {
+        id: othersId,
+        tokenKey: "OTHERS",
+        label: "Others",
+        domain: "expense_category",
+        organizationId: orgId,
+        isSystem: false,
+        isInjectable: true,
+        isVisible: true,
+        sortOrder: 3,
+      },
+    ]);
+
     await db.insert(expenseCategories).values([
-      { id: uuidv4(), organizationId: orgId, name: "Transportation", tokenKey: "TRANSPORTATION" },
-      { id: uuidv4(), organizationId: orgId, name: "Office", tokenKey: "OFFICE" },
-      { id: uuidv4(), organizationId: orgId, name: "Others", tokenKey: "OTHERS" },
+      { id: totalId, organizationId: orgId },
+      { id: transId, organizationId: orgId },
+      { id: officeId, organizationId: orgId },
+      { id: othersId, organizationId: orgId },
     ]);
   }
 
@@ -30,14 +86,14 @@ export async function seedOrganizationDefaults(db: any, orgId: string, userId: s
     .from(projectStatuses)
     .where(eq(projectStatuses.organizationId, orgId));
 
-  let createdStatusId: string | null = null;
-  let completedStatusId: string | null = null;
+  let _createdStatusId: string | null = null;
+  let _completedStatusId: string | null = null;
 
   if (existingStatuses.length === 0) {
     const createdId = uuidv4();
     const completedId = uuidv4();
-    createdStatusId = createdId;
-    completedStatusId = completedId;
+    _createdStatusId = createdId;
+    _completedStatusId = completedId;
 
     await db.insert(projectStatuses).values([
       {
@@ -155,62 +211,9 @@ export async function seedOrganizationDefaults(db: any, orgId: string, userId: s
     // Role Permissions Mapping
     const permissionsToInsert: { roleId: string; permissionKey: string }[] = [];
 
-    const ownerPerms = [
-      "staff:view",
-      "staff:view_details",
-      "staff:view_sensitive",
-      "staff:invite",
-      "staff:create",
-      "staff:edit_role",
-      "staff:revoke",
-      "role:view",
-      "role:create",
-      "role:edit",
-      "role:delete",
-      "client:view",
-      "client:view_details",
-      "client:view_sensitive",
-      "client:create",
-      "client:edit",
-      "client:archive",
-      "client:restore",
-      "client:delete",
-      "client:view_archived",
-      "file:view",
-      "file:view_details",
-      "file:view_sensitive",
-      "file:create",
-      "file:edit",
-      "file:archive",
-      "file:restore",
-      "file:delete",
-      "file:view_archived",
-      "finance:view_expenses",
-      "finance:request_funds",
-      "finance:approve_funds",
-      "finance:record_expense",
-      "finance:view_wallets",
-      "finance:view_wallet_details",
-      "finance:manage_wallets",
-      "finance:manage_categories",
-      "invoice:view",
-      "invoice:create",
-      "invoice:edit",
-      "invoice:delete",
-      "template:view",
-      "template:create",
-      "template:edit",
-      "template:delete",
-      "workspace:manage_fields",
-      "workspace:manage_billing",
-      "workspace:manage_settings",
-      "workflow:view",
-      "workflow:manage",
-      "file:advance_status",
-      "audit:view",
-    ];
+    const ownerPerms: AppPermission[] = PERMISSIONS_CATALOG.map((p) => p.key);
 
-    const managerPerms = [
+    const managerPerms: AppPermission[] = [
       "staff:view",
       "staff:view_details",
       "staff:invite",
@@ -224,20 +227,41 @@ export async function seedOrganizationDefaults(db: any, orgId: string, userId: s
       "file:create",
       "file:edit",
       "file:archive",
+      "file:advance_status",
       "finance:view_expenses",
       "finance:request_funds",
       "finance:approve_funds",
       "finance:record_expense",
       "finance:view_wallets",
+      "finance:view_invoices",
       "invoice:view",
-      "invoice:create",
-      "invoice:edit",
+      "invoice:create_draft",
+      "invoice:fill_values",
+      "invoice:edit_line_labels",
+      "invoice:manage_optional_rows",
+      "invoice:finalize",
       "template:view",
       "workflow:view",
-      "file:advance_status",
+      "inventory:view_products",
+      "inventory:create_product",
+      "inventory:edit_product",
+      "inventory:view_customers",
+      "inventory:create_customer",
+      "inventory:edit_customer",
+      "inventory:view_warehouses",
+      "inventory:view_purchases",
+      "inventory:create_purchase",
+      "inventory:edit_purchase",
+      "inventory:confirm_purchase",
+      "inventory:view_sales",
+      "inventory:create_sale",
+      "inventory:edit_sale",
+      "inventory:confirm_sale",
+      "inventory:view_stock",
+      "inventory:view_transactions",
     ];
 
-    const staffPerms = [
+    const staffPerms: AppPermission[] = [
       "staff:view",
       "client:view",
       "client:create",
@@ -249,6 +273,16 @@ export async function seedOrganizationDefaults(db: any, orgId: string, userId: s
       "file:advance_status",
       "finance:view_expenses",
       "finance:request_funds",
+      "invoice:view",
+      "invoice:fill_values",
+      "invoice:manage_optional_rows",
+      "inventory:view_products",
+      "inventory:view_customers",
+      "inventory:view_purchases",
+      "inventory:create_purchase",
+      "inventory:view_sales",
+      "inventory:create_sale",
+      "inventory:view_stock",
     ];
 
     // Clear existing permissions for these roles so we can safely re-insert
@@ -280,9 +314,13 @@ export async function seedOrganizationDefaults(db: any, orgId: string, userId: s
 
     // Update Manager and Staff to be isSystem: false if they were previously created as true
     for (const role of [managerRole, staffRole].filter(Boolean)) {
-      if (role && role.isSystem) {
+      if (role?.isSystem) {
         await db.update(orgRoles).set({ isSystem: false }).where(eq(orgRoles.id, role.id));
       }
     }
   }
+
+  // 4. Seed Default Agency Invoice Templates
+  const { seedAgencyTemplates } = await import("./seed-agency-templates");
+  await seedAgencyTemplates(db, orgId, userId);
 }

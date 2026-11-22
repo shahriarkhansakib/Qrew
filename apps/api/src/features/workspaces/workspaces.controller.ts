@@ -1,10 +1,10 @@
 import * as schema from "@starter/db";
 import { db, members, orgMemberRoles, orgRoles, users } from "@starter/db";
-import crypto from "crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { Context } from "hono";
 import { v4 as uuidv4 } from "uuid";
 import { auth } from "../../infra/lib/auth";
+import { PermissionService } from "../permissions/permission.service";
 
 export class WorkspacesController {
   static async createWorkspace(c: Context) {
@@ -148,8 +148,8 @@ export class WorkspacesController {
         where: eq(users.email, normalizedEmail),
       });
 
-      const { sendSmartEmail } = await import("../../infra/lib/auth");
-      const frontendUrl = `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite?id=${inviteId}`;
+      const { resolveAppOrigin, sendSmartEmail } = await import("../../infra/lib/auth");
+      const frontendUrl = `${resolveAppOrigin()}/accept-invite?id=${inviteId}`;
       const orgName = org?.name || "a workspace";
 
       const emailContent = existingUser
@@ -495,6 +495,9 @@ export class WorkspacesController {
         assignedBy: sessionData.user.id,
       });
 
+      // Instantly purge Redis permissions cache so role updates apply immediately
+      await PermissionService.invalidateCache(targetMember.userId, activeOrgId);
+
       return c.json({ success: true }, 200);
     } catch (error) {
       console.error("[WorkspacesController.updateStaffRole] Failed:", error);
@@ -518,6 +521,9 @@ export class WorkspacesController {
       .returning();
 
     if (!deleted) return c.json({ error: "Member not found" }, 404);
+
+    // Instantly purge Redis permissions cache so revoked members lose access immediately
+    await PermissionService.invalidateCache(deleted.userId, orgId);
 
     return c.json({ success: true });
   }
@@ -544,7 +550,7 @@ export class WorkspacesController {
         if (org.metadata) {
           metadata = JSON.parse(org.metadata);
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignore parse errors
       }
 
@@ -579,7 +585,7 @@ export class WorkspacesController {
         if (org.metadata) {
           currentMetadata = JSON.parse(org.metadata);
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignore parse errors
       }
 
@@ -616,7 +622,7 @@ export class WorkspacesController {
       let metadata: any = {};
       try {
         if (org.metadata) metadata = JSON.parse(org.metadata);
-      } catch (e) {}
+      } catch (_e) {}
 
       const userPrefs = metadata[`userPrefs_${userId}`] || {};
       return c.json({ preferences: userPrefs });
@@ -648,7 +654,7 @@ export class WorkspacesController {
       let currentMetadata: any = {};
       try {
         if (org.metadata) currentMetadata = JSON.parse(org.metadata);
-      } catch (e) {}
+      } catch (_e) {}
 
       const key = `userPrefs_${userId}`;
       const currentUserPrefs = currentMetadata[key] || {};
@@ -731,7 +737,12 @@ export class WorkspacesController {
 
       // 2. Recent entities
       const recentFiles = await db
-        .select()
+        .select({
+          id: schema.projects.id,
+          name: schema.projects.name,
+          status: schema.projects.status,
+          createdAt: schema.projects.createdAt,
+        })
         .from(schema.projects)
         .where(eq(schema.projects.organizationId, activeOrgId))
         .orderBy(desc(schema.projects.createdAt))

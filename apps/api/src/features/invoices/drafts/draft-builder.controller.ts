@@ -1,6 +1,20 @@
-import { db, decodeFormula, encodeFormula, invoiceDrafts } from "@starter/db";
-import { and, eq } from "drizzle-orm";
+import {
+  customFieldDefinitions,
+  db,
+  decodeFormula,
+  encodeFormula,
+  invoiceDrafts,
+  invoiceTemplates,
+  TemplateOptionalRow,
+  templateHeaderFields,
+  tokens,
+} from "@starter/db";
+import { and, asc, eq } from "drizzle-orm";
 import { Context } from "hono";
+import { v4 as uuidv4 } from "uuid";
+import { TokenService } from "../../tokens/token.service";
+import { validateDraftDag } from "../engine/engine-utils";
+import { appendAuditEntry } from "./draft-audit";
 
 async function getDraft(c: Context) {
   const draftId = c.req.param("id") as string;
@@ -13,11 +27,33 @@ async function getDraft(c: Context) {
   return draft;
 }
 
-async function updateDraft(id: string, updates: any) {
+async function updateDraft(
+  draftId: string,
+  updates: any,
+  c?: Context,
+  action: string = "Edited draft",
+) {
+  let updatedHistory: any;
+  if (c) {
+    const user = c.get("user") as any;
+    const organizationId = c.get("organizationId");
+    if (user && organizationId) {
+      const current = await db.query.invoiceDrafts.findFirst({
+        where: and(eq(invoiceDrafts.id, draftId), eq(invoiceDrafts.organizationId, organizationId)),
+        columns: { editHistory: true },
+      });
+      updatedHistory = appendAuditEntry(current?.editHistory, user, action);
+    }
+  }
+
   const [updated] = await db
     .update(invoiceDrafts)
-    .set(updates)
-    .where(eq(invoiceDrafts.id, id))
+    .set({
+      ...updates,
+      ...(updatedHistory ? { editHistory: updatedHistory } : {}),
+      lastAutoSavedAt: new Date(),
+    })
+    .where(eq(invoiceDrafts.id, draftId))
     .returning();
   return updated;
 }
@@ -32,7 +68,7 @@ function toSnakeCase(label: string): string {
     .replace(/^_|_$/, "");
 }
 
-function buildDraftIndices(draft: any) {
+export async function buildDraftIndices(draft: any, organizationId?: string) {
   const sections: any[] = draft.draftSections || [];
   const constants: any = draft.draftConstants || {};
 
@@ -42,6 +78,17 @@ function buildDraftIndices(draft: any) {
   const secIdToToken: Record<string, string> = {};
   const tplTokenToId: Record<string, string> = {};
   const tplIdToToken: Record<string, string> = {};
+
+  if (draft?.sourceTemplateId) {
+    try {
+      const orgId = organizationId || draft.organizationId || "";
+      const tplMaps = await TokenService.getTemplateTokenMaps(draft.sourceTemplateId, orgId);
+      Object.assign(tokenToId, tplMaps.tokenMap);
+      Object.assign(idToToken, tplMaps.idToToken);
+    } catch (e) {
+      console.error("[buildDraftIndices] Failed to load template token maps", e);
+    }
+  }
 
   for (const sec of sections) {
     if (sec.id && sec.sectionToken) {
@@ -71,7 +118,10 @@ export class DraftBuilderController {
   static async getSections(c: Context) {
     const draft = await getDraft(c);
     if (!draft) return c.json({ error: "Draft not found" }, 404);
-    const { idToToken, secIdToToken, tplIdToToken } = buildDraftIndices(draft);
+    const { idToToken, secIdToToken, tplIdToToken } = await buildDraftIndices(
+      draft,
+      c.get("organizationId"),
+    );
 
     const decodedSections = (draft.draftSections || []).map((sec: any) => ({
       ...sec,
@@ -117,10 +167,14 @@ export class DraftBuilderController {
       description: body.description,
     };
 
-    await updateDraft(draft.id, {
-      draftConstants: constants,
-      lastAutoSavedAt: new Date(),
-    });
+    await updateDraft(
+      draft.id,
+      {
+        draftConstants: constants,
+      },
+      c,
+      "Created template constant",
+    );
     return c.json(constants[body.key]);
   }
 
@@ -135,10 +189,14 @@ export class DraftBuilderController {
     if (!key) return c.json({ error: "Constant not found" }, 404);
 
     constants[key] = { ...constants[key], ...body };
-    await updateDraft(draft.id, {
-      draftConstants: constants,
-      lastAutoSavedAt: new Date(),
-    });
+    await updateDraft(
+      draft.id,
+      {
+        draftConstants: constants,
+      },
+      c,
+      "Updated template constant",
+    );
     return c.json(constants[key]);
   }
 
@@ -151,10 +209,14 @@ export class DraftBuilderController {
     const key = Object.keys(constants).find((k) => constants[k].id === constantId);
     if (key) {
       delete constants[key];
-      await updateDraft(draft.id, {
-        draftConstants: constants,
-        lastAutoSavedAt: new Date(),
-      });
+      await updateDraft(
+        draft.id,
+        {
+          draftConstants: constants,
+        },
+        c,
+        "Deleted template constant",
+      );
     }
     return c.json({ success: true });
   }
@@ -179,10 +241,14 @@ export class DraftBuilderController {
     };
 
     sections.push(newSection);
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Created section",
+    );
     return c.json(newSection, 201);
   }
 
@@ -197,10 +263,14 @@ export class DraftBuilderController {
     if (idx === -1) return c.json({ error: "Section not found" }, 404);
 
     sections[idx] = { ...sections[idx], ...body };
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Updated section",
+    );
     return c.json(sections[idx]);
   }
 
@@ -211,10 +281,14 @@ export class DraftBuilderController {
 
     let sections = draft.draftSections || [];
     sections = sections.filter((s: any) => s.id !== sectionId);
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Deleted section",
+    );
     return c.json({ success: true });
   }
 
@@ -231,10 +305,14 @@ export class DraftBuilderController {
     }
     sections.sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0));
 
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Reordered sections",
+    );
     return c.json({ success: true });
   }
 
@@ -255,7 +333,7 @@ export class DraftBuilderController {
     }
 
     const { tokenToId, idToToken, secTokenToId, secIdToToken, tplTokenToId, tplIdToToken } =
-      buildDraftIndices(draft);
+      await buildDraftIndices(draft, c.get("organizationId"));
 
     const rowId = crypto.randomUUID();
     tokenToId[body.rowToken] = rowId;
@@ -276,10 +354,14 @@ export class DraftBuilderController {
     };
     s.rows.push(newRow);
 
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Created row",
+    );
 
     return c.json(
       {
@@ -305,7 +387,7 @@ export class DraftBuilderController {
     if (rIdx === -1) return c.json({ error: "Row not found" }, 404);
 
     const { tokenToId, idToToken, secTokenToId, secIdToToken, tplTokenToId, tplIdToToken } =
-      buildDraftIndices(draft);
+      await buildDraftIndices(draft, c.get("organizationId"));
 
     const updateFields: any = { ...body };
     if (updateFields.rowToken && updateFields.rowToken !== s.rows[rIdx].rowToken) {
@@ -330,10 +412,30 @@ export class DraftBuilderController {
 
     s.rows[rIdx] = { ...s.rows[rIdx], ...updateFields };
 
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    if (updateFields.formula) {
+      const testDraft = { ...draft, draftSections: sections };
+      const validation = validateDraftDag(testDraft);
+      if (!validation.valid) {
+        return c.json(
+          {
+            error:
+              validation.errors[0]?.message ||
+              "Invalid formula: circular reference or illegal dependency detected",
+            errors: validation.errors,
+          },
+          422,
+        );
+      }
+    }
+
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Updated row",
+    );
 
     return c.json({
       ...s.rows[rIdx],
@@ -351,10 +453,14 @@ export class DraftBuilderController {
     const s = sections.find((s: any) => s.id === sectionId);
     if (s) {
       s.rows = s.rows.filter((r: any) => r.id !== rowId);
-      await updateDraft(draft.id, {
-        draftSections: sections,
-        lastAutoSavedAt: new Date(),
-      });
+      await updateDraft(
+        draft.id,
+        {
+          draftSections: sections,
+        },
+        c,
+        "Deleted row",
+      );
     }
     return c.json({ success: true });
   }
@@ -374,10 +480,14 @@ export class DraftBuilderController {
         if (match) r.displayOrder = match.displayOrder;
       }
       s.rows.sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0));
-      await updateDraft(draft.id, {
-        draftSections: sections,
-        lastAutoSavedAt: new Date(),
-      });
+      await updateDraft(
+        draft.id,
+        {
+          draftSections: sections,
+        },
+        c,
+        "Reordered rows",
+      );
     }
     return c.json({ success: true });
   }
@@ -396,7 +506,10 @@ export class DraftBuilderController {
     const r = s.rows.find((r: any) => r.id === rowId);
     if (!r) return c.json({ error: "Row not found" }, 404);
 
-    const { idToToken, secIdToToken, tplIdToToken } = buildDraftIndices(draft);
+    const { idToToken, secIdToToken, tplIdToToken } = await buildDraftIndices(
+      draft,
+      c.get("organizationId"),
+    );
     const decodedCharges = (r.charges || []).map((ch: any) => ({
       ...ch,
       formula: decodeFormula(ch.formula, idToToken, secIdToToken, tplIdToToken) ?? ch.formula,
@@ -419,7 +532,7 @@ export class DraftBuilderController {
     if (!r) return c.json({ error: "Row not found" }, 404);
 
     const { tokenToId, idToToken, secTokenToId, secIdToToken, tplTokenToId, tplIdToToken } =
-      buildDraftIndices(draft);
+      await buildDraftIndices(draft, c.get("organizationId"));
 
     const chargeToken = body.chargeToken || `${r.rowToken}_${toSnakeCase(body.label)}`;
     const encodedFormula = body.formula
@@ -441,10 +554,30 @@ export class DraftBuilderController {
     if (!r.charges) r.charges = [];
     r.charges.push(newCharge);
 
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    if (encodedFormula) {
+      const testDraft = { ...draft, draftSections: sections };
+      const validation = validateDraftDag(testDraft);
+      if (!validation.valid) {
+        return c.json(
+          {
+            error:
+              validation.errors[0]?.message ||
+              "Invalid charge formula: circular reference or illegal dependency detected",
+            errors: validation.errors,
+          },
+          422,
+        );
+      }
+    }
+
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Created row charge",
+    );
 
     return c.json(
       {
@@ -469,13 +602,13 @@ export class DraftBuilderController {
     const s = sections.find((s: any) => s.id === sectionId);
     if (!s) return c.json({ error: "Section not found" }, 404);
     const r = s.rows.find((r: any) => r.id === rowId);
-    if (!r || !r.charges) return c.json({ error: "Row not found" }, 404);
+    if (!r?.charges) return c.json({ error: "Row not found" }, 404);
 
     const cIdx = r.charges.findIndex((ch: any) => ch.id === chargeId);
     if (cIdx === -1) return c.json({ error: "Charge not found" }, 404);
 
     const { tokenToId, idToToken, secTokenToId, secIdToToken, tplTokenToId, tplIdToToken } =
-      buildDraftIndices(draft);
+      await buildDraftIndices(draft, c.get("organizationId"));
 
     const updateData = { ...body };
     if (updateData.formula !== undefined) {
@@ -486,10 +619,30 @@ export class DraftBuilderController {
 
     r.charges[cIdx] = { ...r.charges[cIdx], ...updateData };
 
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    if (updateData.formula) {
+      const testDraft = { ...draft, draftSections: sections };
+      const validation = validateDraftDag(testDraft);
+      if (!validation.valid) {
+        return c.json(
+          {
+            error:
+              validation.errors[0]?.message ||
+              "Invalid charge formula: circular reference or illegal dependency detected",
+            errors: validation.errors,
+          },
+          422,
+        );
+      }
+    }
+
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Updated row charge",
+    );
 
     return c.json({
       ...r.charges[cIdx],
@@ -510,12 +663,16 @@ export class DraftBuilderController {
     const s = sections.find((s: any) => s.id === sectionId);
     if (!s) return c.json({ error: "Section not found" }, 404);
     const r = s.rows.find((r: any) => r.id === rowId);
-    if (r && r.charges) {
+    if (r?.charges) {
       r.charges = r.charges.filter((ch: any) => ch.id !== chargeId);
-      await updateDraft(draft.id, {
-        draftSections: sections,
-        lastAutoSavedAt: new Date(),
-      });
+      await updateDraft(
+        draft.id,
+        {
+          draftSections: sections,
+        },
+        c,
+        "Deleted row charge",
+      );
     }
     return c.json({ success: true });
   }
@@ -533,7 +690,7 @@ export class DraftBuilderController {
     const s = sections.find((s: any) => s.id === sectionId);
     if (!s) return c.json({ error: "Section not found" }, 404);
     const r = s.rows.find((r: any) => r.id === rowId);
-    if (!r || !r.charges) return c.json({ error: "Row not found" }, 404);
+    if (!r?.charges) return c.json({ error: "Row not found" }, 404);
 
     const chargeMap = new Map<string, any>(r.charges.map((ch: any) => [ch.id, ch]));
     const reordered: any[] = [];
@@ -551,10 +708,14 @@ export class DraftBuilderController {
     }
     r.charges = reordered;
 
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Reordered row charges",
+    );
     return c.json({ success: true });
   }
 
@@ -571,7 +732,7 @@ export class DraftBuilderController {
     if (!s) return c.json({ error: "Section not found" }, 404);
 
     const { tokenToId, idToToken, secTokenToId, secIdToToken, tplTokenToId, tplIdToToken } =
-      buildDraftIndices(draft);
+      await buildDraftIndices(draft, c.get("organizationId"));
 
     const encodedFormula = body.formula
       ? encodeFormula(body.formula, tokenToId, secTokenToId, tplTokenToId)
@@ -588,10 +749,30 @@ export class DraftBuilderController {
     if (!s.sectionCharges) s.sectionCharges = [];
     s.sectionCharges.push(newCharge);
 
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    if (encodedFormula) {
+      const testDraft = { ...draft, draftSections: sections };
+      const validation = validateDraftDag(testDraft);
+      if (!validation.valid) {
+        return c.json(
+          {
+            error:
+              validation.errors[0]?.message ||
+              "Invalid section charge formula: circular reference or illegal dependency detected",
+            errors: validation.errors,
+          },
+          422,
+        );
+      }
+    }
+
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Created section charge",
+    );
 
     return c.json(
       {
@@ -619,7 +800,7 @@ export class DraftBuilderController {
     if (cIdx === -1) return c.json({ error: "Charge not found" }, 404);
 
     const { tokenToId, idToToken, secTokenToId, secIdToToken, tplTokenToId, tplIdToToken } =
-      buildDraftIndices(draft);
+      await buildDraftIndices(draft, c.get("organizationId"));
 
     const updateData = { ...body };
     if (updateData.formula !== undefined) {
@@ -630,10 +811,30 @@ export class DraftBuilderController {
 
     s.sectionCharges[cIdx] = { ...s.sectionCharges[cIdx], ...updateData };
 
-    await updateDraft(draft.id, {
-      draftSections: sections,
-      lastAutoSavedAt: new Date(),
-    });
+    if (updateData.formula) {
+      const testDraft = { ...draft, draftSections: sections };
+      const validation = validateDraftDag(testDraft);
+      if (!validation.valid) {
+        return c.json(
+          {
+            error:
+              validation.errors[0]?.message ||
+              "Invalid section charge formula: circular reference or illegal dependency detected",
+            errors: validation.errors,
+          },
+          422,
+        );
+      }
+    }
+
+    await updateDraft(
+      draft.id,
+      {
+        draftSections: sections,
+      },
+      c,
+      "Updated section charge",
+    );
 
     return c.json({
       ...s.sectionCharges[cIdx],
@@ -651,12 +852,16 @@ export class DraftBuilderController {
 
     const sections = draft.draftSections || [];
     const s = sections.find((s: any) => s.id === sectionId);
-    if (s && s.sectionCharges) {
+    if (s?.sectionCharges) {
       s.sectionCharges = s.sectionCharges.filter((ch: any) => ch.id !== chargeId);
-      await updateDraft(draft.id, {
-        draftSections: sections,
-        lastAutoSavedAt: new Date(),
-      });
+      await updateDraft(
+        draft.id,
+        {
+          draftSections: sections,
+        },
+        c,
+        "Deleted section charge",
+      );
     }
     return c.json({ success: true });
   }
@@ -671,7 +876,7 @@ export class DraftBuilderController {
 
     const sections = draft.draftSections || [];
     const s = sections.find((s: any) => s.id === sectionId);
-    if (s && s.sectionCharges) {
+    if (s?.sectionCharges) {
       const chargeMap = new Map<string, any>(s.sectionCharges.map((ch: any) => [ch.id, ch]));
       const reordered: any[] = [];
       for (let i = 0; i < orderedIds.length; i++) {
@@ -688,11 +893,466 @@ export class DraftBuilderController {
       }
       s.sectionCharges = reordered;
 
-      await updateDraft(draft.id, {
-        draftSections: sections,
-        lastAutoSavedAt: new Date(),
-      });
+      await updateDraft(
+        draft.id,
+        {
+          draftSections: sections,
+        },
+        c,
+        "Reordered section charges",
+      );
     }
     return c.json({ success: true });
+  }
+
+  static async listOptionalRows(c: Context) {
+    const draft = await getDraft(c);
+    if (!draft) return c.json({ error: "Draft not found" }, 404);
+    if (!draft.sourceTemplateId) {
+      return c.json({ available: [], optionalRows: [], attached: [], activeRowTokens: [] });
+    }
+
+    const tpl = await db.query.invoiceTemplates.findFirst({
+      where: eq(invoiceTemplates.id, draft.sourceTemplateId),
+    });
+
+    const optionalRows = (tpl?.optionalRows as TemplateOptionalRow[]) || [];
+    const sections: any[] = draft.draftSections || [];
+    const activeRowTokens: string[] = [];
+    const attached: any[] = [];
+
+    for (const sec of sections) {
+      for (const r of sec.rows || []) {
+        if (r.rowToken) activeRowTokens.push(r.rowToken);
+        if (r.isOptionalService || r.templateOptionalRowId) {
+          attached.push({
+            rowId: r.id,
+            token: r.rowToken,
+            canonicalToken: r.canonicalToken || r.rowToken?.replace(/_\d+$/, ""),
+            label: r.label,
+            sectionId: sec.id,
+            sectionToken: sec.sectionToken,
+            sectionTitle: sec.headerName || sec.sectionToken,
+            valueType: r.valueType,
+            initialValue: r.initialValue,
+            formula: r.formula,
+          });
+        }
+      }
+    }
+
+    return c.json({
+      available: optionalRows,
+      optionalRows,
+      attached,
+      activeRowTokens,
+    });
+  }
+
+  static async addOptionalRow(c: Context) {
+    const draft = await getDraft(c);
+    if (!draft) return c.json({ error: "Draft not found" }, 404);
+    if (!draft.sourceTemplateId) return c.json({ error: "Draft has no template assigned" }, 400);
+
+    const body = await c.req.json();
+    const { canonicalToken, optionalRowId, sectionId, customLabel, customValue, customFormula } =
+      body;
+    const targetLookup = canonicalToken || optionalRowId;
+    if (!targetLookup) {
+      return c.json({ error: "canonicalToken or optionalRowId is required" }, 400);
+    }
+
+    const tpl = await db.query.invoiceTemplates.findFirst({
+      where: eq(invoiceTemplates.id, draft.sourceTemplateId),
+    });
+
+    const catalog = (tpl?.optionalRows as TemplateOptionalRow[]) || [];
+    const templateItem = catalog.find(
+      (item) => item.rowToken === targetLookup || item.id === targetLookup,
+    );
+    if (!templateItem) return c.json({ error: "Optional row not found in template catalog" }, 404);
+
+    const sections: any[] = draft.draftSections || [];
+    if (sections.length === 0) return c.json({ error: "Draft has no sections" }, 400);
+
+    // Target section: provided sectionId, or matching suggestedSectionToken, or first section
+    let targetSection = sections.find((s: any) => s.id === sectionId);
+    if (!targetSection && templateItem.suggestedSectionToken) {
+      targetSection = sections.find(
+        (s: any) =>
+          s.sectionToken === templateItem.suggestedSectionToken ||
+          `SEC_${s.sectionToken}` === templateItem.suggestedSectionToken,
+      );
+    }
+    if (!targetSection) {
+      targetSection = sections[0];
+    }
+
+    // Determine unique token: base token, or sequential suffix if repeated
+    const existingTokens = new Set<string>();
+    for (const s of sections) {
+      for (const r of s.rows || []) {
+        if (r.rowToken) existingTokens.add(r.rowToken);
+      }
+    }
+
+    let finalToken = templateItem.rowToken;
+    if (existingTokens.has(finalToken)) {
+      let counter = 2;
+      while (existingTokens.has(`${templateItem.rowToken}_${counter}`)) {
+        counter++;
+      }
+      finalToken = `${templateItem.rowToken}_${counter}`;
+    }
+
+    if (!targetSection.rows) targetSection.rows = [];
+
+    const newRow = {
+      id: uuidv4(),
+      rowToken: finalToken,
+      canonicalToken: templateItem.rowToken,
+      label: customLabel?.trim() || templateItem.label,
+      subDescription: templateItem.subDescription || null,
+      valueType: templateItem.valueType,
+      formula: customFormula !== undefined ? customFormula : templateItem.formula || null,
+      initialValue:
+        customValue !== undefined
+          ? parseFloat(customValue) || null
+          : templateItem.initialValue
+            ? parseFloat(templateItem.initialValue) || null
+            : null,
+      sortOrder: targetSection.rows.length,
+      isOptionalService: true,
+      templateOptionalRowId: templateItem.id,
+      charges: [],
+    };
+
+    targetSection.rows.push(newRow);
+
+    await updateDraft(
+      draft.id,
+      { draftSections: sections },
+      c,
+      `Added optional service "${newRow.label}" (${newRow.rowToken})`,
+    );
+
+    return c.json({ success: true, row: newRow, allocatedToken: finalToken });
+  }
+
+  static async removeOptionalRow(c: Context) {
+    const draft = await getDraft(c);
+    if (!draft) return c.json({ error: "Draft not found" }, 404);
+    const rowId = c.req.param("rowId");
+    if (!rowId) return c.json({ error: "rowId is required" }, 400);
+
+    const sections: any[] = draft.draftSections || [];
+    let removedLabel = "Optional service";
+    let removedToken = "";
+    let found = false;
+
+    for (const s of sections) {
+      if (s.rows) {
+        const idx = s.rows.findIndex((r: any) => r.id === rowId);
+        if (idx !== -1) {
+          const targetRow = s.rows[idx];
+          if (targetRow.isOptionalService !== true) {
+            return c.json(
+              { error: "Only prebuilt optional service rows can be deleted from drafts" },
+              400,
+            );
+          }
+          removedLabel = targetRow.label || removedLabel;
+          removedToken = targetRow.rowToken || "";
+          s.rows.splice(idx, 1);
+          // Re-index remaining rows
+          s.rows.forEach((r: any, i: number) => {
+            r.sortOrder = i;
+          });
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (!found) return c.json({ error: "Row not found in draft" }, 404);
+
+    await updateDraft(
+      draft.id,
+      { draftSections: sections },
+      c,
+      `Removed optional service "${removedLabel}" (${removedToken})`,
+    );
+
+    return c.json({
+      success: true,
+      deletedRowId: rowId,
+      token: removedToken,
+      label: removedLabel,
+    });
+  }
+
+  static async listHeaderFields(c: Context) {
+    const draft = await getDraft(c);
+    if (!draft) return c.json({ error: "Draft not found" }, 404);
+    if (Array.isArray(draft.draftHeaderFields) && draft.draftHeaderFields.length > 0) {
+      let modified = false;
+      const normalized = draft.draftHeaderFields.map((f: any, idx: number) => {
+        let col = f.columnPosition;
+        if (col !== "left" && col !== "right") {
+          col = idx % 2 === 0 ? "left" : "right";
+          modified = true;
+        }
+        return {
+          ...f,
+          columnPosition: col,
+          fieldType: f.fieldType || "file_field",
+          isFormulaInjectable: f.isFormulaInjectable ?? f.isInjectable ?? false,
+          fileFieldKey: f.fileFieldKey || f.fieldKey || f.systemFieldKey,
+          tokenKey: f.tokenKey || (f.fieldKey || f.systemFieldKey || "").toUpperCase(),
+        };
+      });
+      if (modified) {
+        await updateDraft(draft.id, { draftHeaderFields: normalized }, c);
+      }
+      return c.json(normalized);
+    }
+
+    if (draft.sourceTemplateId) {
+      try {
+        const fields = await db
+          .select({
+            id: templateHeaderFields.id,
+            templateId: templateHeaderFields.templateId,
+            fieldType: templateHeaderFields.fieldType,
+            columnPosition: templateHeaderFields.columnPosition,
+            customFieldDefinitionId: templateHeaderFields.customFieldDefinitionId,
+            systemFieldKey: templateHeaderFields.systemFieldKey,
+            orgConfigKey: templateHeaderFields.orgConfigKey,
+            defaultManualValue: templateHeaderFields.defaultManualValue,
+            placeholder: templateHeaderFields.placeholder,
+            fieldKey: customFieldDefinitions.fieldKey,
+            tokenKey: tokens.tokenKey,
+            label: tokens.label,
+            description: tokens.description,
+            isFormulaInjectable: tokens.isInjectable,
+            sortOrder: tokens.sortOrder,
+          })
+          .from(templateHeaderFields)
+          .innerJoin(tokens, eq(tokens.id, templateHeaderFields.id))
+          .leftJoin(
+            customFieldDefinitions,
+            eq(templateHeaderFields.customFieldDefinitionId, customFieldDefinitions.id),
+          )
+          .where(eq(templateHeaderFields.templateId, draft.sourceTemplateId))
+          .orderBy(asc(tokens.sortOrder));
+
+        if (fields.length > 0) {
+          const draftFields = fields.map((f) => ({
+            id: crypto.randomUUID(),
+            label: f.label || "Field",
+            fieldType: f.fieldType || "file_field",
+            fileFieldKey: f.fieldKey || f.systemFieldKey || f.tokenKey,
+            tokenKey: f.tokenKey || f.fieldKey,
+            isFormulaInjectable: f.isFormulaInjectable ?? false,
+            columnPosition: f.columnPosition || "left",
+            sortOrder: f.sortOrder ?? 0,
+            defaultManualValue: f.defaultManualValue || "",
+          }));
+          await updateDraft(draft.id, { draftHeaderFields: draftFields }, c);
+          return c.json(draftFields);
+        }
+      } catch (err) {
+        console.error(
+          "[listHeaderFields] Failed to populate draft header fields from template",
+          err,
+        );
+      }
+    }
+
+    // Fallback: Seed default system fields and project custom fields so File Details is never empty
+    const defaultFields = [
+      {
+        id: crypto.randomUUID(),
+        label: "Name",
+        fieldType: "file_field",
+        fileFieldKey: "name",
+        tokenKey: "NAME",
+        columnPosition: "left",
+        sortOrder: 0,
+        isFormulaInjectable: false,
+      },
+      {
+        id: crypto.randomUUID(),
+        label: "Client",
+        fieldType: "file_field",
+        fileFieldKey: "clientId",
+        tokenKey: "CLIENT",
+        columnPosition: "left",
+        sortOrder: 1,
+        isFormulaInjectable: false,
+      },
+      {
+        id: crypto.randomUUID(),
+        label: "Status",
+        fieldType: "file_field",
+        fileFieldKey: "status",
+        tokenKey: "STATUS",
+        columnPosition: "right",
+        sortOrder: 0,
+        isFormulaInjectable: false,
+      },
+    ];
+
+    try {
+      const orgId = c.get("organizationId");
+      if (orgId) {
+        const projectCustomFields = await db
+          .select()
+          .from(customFieldDefinitions)
+          .where(
+            and(
+              eq(customFieldDefinitions.organizationId, orgId),
+              eq(customFieldDefinitions.entityType, "project"),
+            ),
+          );
+
+        projectCustomFields.forEach((cf: any, idx: number) => {
+          defaultFields.push({
+            id: crypto.randomUUID(),
+            label: cf.fieldName || cf.fieldKey,
+            fieldType: "file_field",
+            fileFieldKey: cf.fieldKey,
+            tokenKey: cf.fieldKey.toUpperCase(),
+            columnPosition: idx % 2 === 0 ? "right" : "left",
+            sortOrder: Math.floor(idx / 2) + 1,
+            isFormulaInjectable: cf.fieldType === "number" || cf.fieldType === "currency",
+          });
+        });
+      }
+
+      await updateDraft(draft.id, { draftHeaderFields: defaultFields }, c);
+      return c.json(defaultFields);
+    } catch (e) {
+      console.error("[listHeaderFields] Failed to seed default header fields", e);
+      return c.json(defaultFields);
+    }
+  }
+
+  static async createHeaderField(c: Context) {
+    const draft = await getDraft(c);
+    if (!draft) return c.json({ error: "Draft not found" }, 404);
+    const body = await c.req.json();
+    const fields = Array.isArray(draft.draftHeaderFields) ? [...draft.draftHeaderFields] : [];
+    const cleanToken = (body.fileFieldKey || body.label || "FIELD")
+      .trim()
+      .replace(/[^a-zA-Z0-9]/g, "_")
+      .toUpperCase();
+
+    const newField = {
+      id: crypto.randomUUID(),
+      label: body.label || "New Field",
+      fieldType: body.fieldType || "file_field",
+      fileFieldKey: cleanToken,
+      tokenKey: cleanToken,
+      isFormulaInjectable: body.isFormulaInjectable ?? false,
+      columnPosition: body.columnPosition || "left",
+      sortOrder: fields.length,
+      defaultManualValue: body.defaultManualValue || "",
+    };
+
+    fields.push(newField);
+    await updateDraft(
+      draft.id,
+      { draftHeaderFields: fields },
+      c,
+      `Added description field "${newField.label}"`,
+    );
+    return c.json(newField, 201);
+  }
+
+  static async updateHeaderField(c: Context) {
+    const draft = await getDraft(c);
+    if (!draft) return c.json({ error: "Draft not found" }, 404);
+    const fieldId = c.req.param("fieldId");
+    const body = await c.req.json();
+    const fields = Array.isArray(draft.draftHeaderFields) ? [...draft.draftHeaderFields] : [];
+    const idx = fields.findIndex((f) => f.id === fieldId);
+    if (idx === -1) return c.json({ error: "Header field not found" }, 404);
+
+    fields[idx] = { ...fields[idx], ...body };
+    await updateDraft(
+      draft.id,
+      { draftHeaderFields: fields },
+      c,
+      `Updated description field "${fields[idx].label}"`,
+    );
+    return c.json(fields[idx]);
+  }
+
+  static async deleteHeaderField(c: Context) {
+    const draft = await getDraft(c);
+    if (!draft) return c.json({ error: "Draft not found" }, 404);
+    const fieldId = c.req.param("fieldId");
+    const fields = Array.isArray(draft.draftHeaderFields) ? [...draft.draftHeaderFields] : [];
+    const filtered = fields.filter((f) => f.id !== fieldId);
+    filtered.forEach((f, i) => {
+      f.sortOrder = i;
+    });
+
+    await updateDraft(draft.id, { draftHeaderFields: filtered }, c, "Deleted description field");
+    return c.json({ success: true, deletedId: fieldId });
+  }
+
+  static async reorderHeaderFields(c: Context) {
+    const draft = await getDraft(c);
+    if (!draft) return c.json({ error: "Draft not found" }, 404);
+    const body = await c.req.json();
+    const updates = body.updates || body.fields || [];
+    const fields = Array.isArray(draft.draftHeaderFields) ? [...draft.draftHeaderFields] : [];
+    const updateMap = new Map((updates || []).map((u: any) => [u.fieldId, u]));
+
+    for (const f of fields) {
+      const u: any = updateMap.get(f.id);
+      if (u) {
+        if (u.sortOrder !== undefined) f.sortOrder = u.sortOrder;
+        if (u.columnPosition !== undefined) f.columnPosition = u.columnPosition;
+      }
+    }
+
+    await updateDraft(draft.id, { draftHeaderFields: fields }, c, "Reordered description fields");
+    return c.json({ success: true });
+  }
+
+  static async updateHeaderValues(c: Context) {
+    const draft = await getDraft(c);
+    if (!draft) return c.json({ error: "Draft not found" }, 404);
+
+    const body = await c.req.json();
+    const currentHeaderValues = (draft.draftHeaderValues as Record<string, any>) || {};
+    const updates: Record<string, any> = {};
+
+    if (body.values && typeof body.values === "object" && !Array.isArray(body.values)) {
+      Object.assign(updates, body.values);
+    } else if (body.key !== undefined && body.value !== undefined) {
+      updates[body.key] = String(body.value);
+      if (body.fieldId) updates[body.fieldId] = String(body.value);
+      if (body.tokenKey) updates[body.tokenKey] = String(body.value);
+    } else if (body.fieldId !== undefined && body.value !== undefined) {
+      updates[body.fieldId] = String(body.value);
+      if (body.tokenKey) updates[body.tokenKey] = String(body.value);
+    } else if (typeof body === "object" && !Array.isArray(body)) {
+      Object.assign(updates, body);
+    }
+
+    const merged = { ...currentHeaderValues, ...updates };
+
+    await updateDraft(
+      draft.id,
+      { draftHeaderValues: merged },
+      c,
+      "Updated custom file field values",
+    );
+
+    return c.json({ success: true, draftHeaderValues: merged });
   }
 }

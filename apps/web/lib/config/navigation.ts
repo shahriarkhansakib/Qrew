@@ -7,6 +7,7 @@
  * The distinction is made at render time in app-shell.tsx.
  */
 
+import type { AppPermission } from "@starter/db/permissions-registry";
 import {
   ArrowLeft,
   BarChart3,
@@ -36,7 +37,7 @@ export interface NavItem {
   name: string;
   href: string;
   icon: any;
-  permission?: string; // PBAC permission key; if set, hide when not granted
+  permission?: AppPermission | AppPermission[]; // Strongly-typed PBAC permission key(s); if set, hide when not granted
 }
 
 export interface NavGroup {
@@ -44,8 +45,8 @@ export interface NavGroup {
   name: string;
   icon: any;
   baseHref: string; // Used to detect active group
-  permission?: string; // PBAC gate on the entire group
-  children: (NavChild & { permission?: string })[];
+  permission?: AppPermission | AppPermission[]; // Strongly-typed PBAC gate on the entire group
+  children: (NavChild & { permission?: AppPermission | AppPermission[] })[];
 }
 
 export type AnyNavItem = NavItem | NavGroup;
@@ -61,7 +62,11 @@ export const NAV_CONFIG = {
       name: "Invoices",
       href: "/dashboard/invoices",
       icon: Receipt,
-      permission: "finance:view_invoices",
+      permission: [
+        "invoice:view",
+        "finance:view_invoices",
+        "finance:manage_invoices",
+      ] as AppPermission[],
     },
     // Inventory is now a collapsible group — children appear as sidebar sub-links.
     {
@@ -128,11 +133,21 @@ export const NAV_CONFIG = {
 
   tenantAdmin: [
     { name: "Overview", href: "/org-admin", icon: LayoutDashboard },
+    {
+      name: "Invoices",
+      href: "/dashboard/invoices",
+      icon: Receipt,
+      permission: [
+        "invoice:view",
+        "finance:view_invoices",
+        "finance:manage_invoices",
+      ] as AppPermission[],
+    },
+    { name: "Invoice Templates", href: "/org-admin/invoice-templates", icon: FileText },
     { name: "Staff Management", href: "/org-admin/staff", icon: Users },
     { name: "Roles & Permissions", href: "/org-admin/roles", icon: Shield },
     { name: "Customize Fields", href: "/org-admin/customize-fields", icon: Settings },
-    { name: "Invoice Templates", href: "/org-admin/invoice-templates", icon: FileText },
-  ],
+  ] as AnyNavItem[],
   tenantAdminExit: {
     name: "Back to Dashboard",
     href: "/dashboard",

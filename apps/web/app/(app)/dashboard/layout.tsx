@@ -8,17 +8,21 @@ import { usePermissionStore } from "@/store/use-permission-store";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
-  const permissions = usePermissionStore((state) => state.permissions);
+  const _permissions = usePermissionStore((state) => state.permissions);
   const can = usePermissionStore((state) => state.can);
+  const canAny = usePermissionStore((state) => state.canAny);
 
   const navItems = useMemo((): AnyNavItem[] => {
     return NAV_CONFIG.user.filter((item: AnyNavItem) => {
       // Check the item-level permission gate if present.
       const itemPermission = (item as NavItem).permission || (item as NavGroup).permission;
-      if (itemPermission) return can(itemPermission);
+      if (itemPermission) {
+        if (Array.isArray(itemPermission)) return canAny(itemPermission);
+        return can(itemPermission);
+      }
       return true;
     });
-  }, [can, permissions]);
+  }, [can, canAny]);
 
   return (
     <AppShell session={session} navItems={navItems} theme="default">

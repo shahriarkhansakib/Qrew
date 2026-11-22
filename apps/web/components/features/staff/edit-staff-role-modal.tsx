@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Pencil } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { apiUrl } from "@/lib/constants";
 
 interface EditStaffRoleModalProps {
   isOpen: boolean;
@@ -43,8 +44,6 @@ export function EditStaffRoleModal({
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [roleId, setRoleId] = useState(currentRoleId || "");
-
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
   // Fetch available roles for the dropdown
   const { data, isLoading: isLoadingRoles } = useQuery({

@@ -16,7 +16,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { apiUrl } from "@/lib/constants";
 
 interface Invitation {
   id: string;
@@ -37,8 +37,7 @@ interface Invitation {
 }
 
 export function InvitationsDataTable() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-  const router = useRouter();
+  const _router = useRouter();
 
   const [revokingInvite, setRevokingInvite] = useState<Invitation | null>(null);
 
@@ -111,7 +110,7 @@ export function InvitationsDataTable() {
               <TableHead>Assigned Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Expires</TableHead>
-              <Can I="staff:provision" fallback={<TableHead className="w-[50px]"></TableHead>}>
+              <Can I="staff:invite" fallback={<TableHead className="w-[50px]"></TableHead>}>
                 <TableHead className="text-right">Actions</TableHead>
               </Can>
             </TableRow>
@@ -136,7 +135,7 @@ export function InvitationsDataTable() {
                   {format(new Date(invite.expiresAt), "MMM d, yyyy")}
                 </TableCell>
 
-                <Can I="staff:provision" fallback={<TableCell></TableCell>}>
+                <Can I="staff:invite" fallback={<TableCell></TableCell>}>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"

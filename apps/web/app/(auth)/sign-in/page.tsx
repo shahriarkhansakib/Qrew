@@ -30,7 +30,7 @@ const signInSchema = z.object({
 type SignInValues = z.infer<typeof signInSchema>;
 
 export default function SignInPage() {
-  const router = useRouter();
+  const _router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [loadingType, setLoadingType] = useState<"credentials" | "google" | null>(null);
@@ -69,11 +69,16 @@ export default function SignInPage() {
     setLoadingType("google");
     setGlobalError(null);
 
-    // Explicitly construct the absolute URL to force the backend to redirect to port 5002
-    await signIn.social({
+    // Construct an explicit same-origin callbackURL for the active deployment host
+    const { error } = await signIn.social({
       provider: "google",
       callbackURL: `${window.location.origin}/sign-in`,
     });
+
+    if (error) {
+      setGlobalError(error.message || "Google sign-in failed. Please try again.");
+      setLoadingType(null);
+    }
   };
 
   const isFormDisabled = loadingType !== null;

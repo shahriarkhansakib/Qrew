@@ -1,48 +1,40 @@
 /**
- * Formula Codec
+ * Formula Codec — Unified Single Namespace
  *
- * Encodes/decodes row, section, constant, file field, and global config tokens.
+ * Storage format: {{$tok:UUID}}
+ * Suffix variants: {{$tok:UUID}}_BASE, {{$tok:UUID}}_CHARGES
  *
- * Storage format (in DB):
- *   {{$row:UUID}}          → ROW_TOKEN (Total)
- *   {{$row:UUID}}_BASE     → ROW_TOKEN_BASE (Base)
- *   {{$row:UUID}}_CHARGES  → ROW_TOKEN_CHARGES (Charges Sum)
- *   {{$sec:UUID}}          → SEC_TOKEN (Total)
- *   {{$sec:UUID}}_BASE     → SEC_TOKEN_BASE (Base)
- *   {{$sec:UUID}}_CHARGES  → SEC_TOKEN_CHARGES (Charges Sum)
- *   {{$tpl:UUID}}          → TPL_TOKEN (in DB) / TPL_<TOKEN> (in engine)
- *   FILE_<TOKEN>           → External project file field (e.g. FILE_CUSTOM1, FILE_GRT)
- *   GBL_<TOKEN>            → Organization-wide global constant (e.g. GBL_G1, GBL_VAT_RATE)
- *   CAT_<TOKEN> / EXP_<TOKEN> → Expense category sums
+ * Display format: bare token name (UPPER_SNAKE_CASE)
+ * Engine eval format: prefixed by domain (EXP_TRANSPORTATION, GBL_VAT_RATE, FILE_GRT, TPL_SURCHARGE, etc.)
  *
- * Display format (in UI):
- *   Bare tokens (e.g. G1, CUSTOM1, T1, PORT_DUES, SEC_PORT), visually distinguished by colors.
+ * EXP_TOTAL is the only token where the prefix is kept in display.
+ * All others: TRANSPORTATION (not EXP_TRANSPORTATION), VAT_RATE (not GBL_VAT_RATE).
  */
 
+export type TokenMap = Record<string, string>; // tokenName -> UUID
+export type IdToTokenMap = Record<string, string>; // UUID -> bareToken
+export type IdToEvalTokenMap = Record<string, string>; // UUID -> enginePrefixedToken
+
+// Compatibility aliases for controller typing
 export type RowTokenToIdMap = Record<string, string>;
 export type RowIdToTokenMap = Record<string, string>;
-
 export type SecTokenToIdMap = Record<string, string>;
 export type SecIdToTokenMap = Record<string, string>;
-
 export type TplTokenToIdMap = Record<string, string>;
 export type TplIdToTokenMap = Record<string, string>;
 
-const ROW_REF_RE = /\{\{\$row:([a-zA-Z0-9_-]+)\}\}/gi;
-const ROW_BASE_REF_RE = /\{\{\$row:([a-zA-Z0-9_-]+)\}\}_BASE/gi;
-const ROW_TOTAL_REF_RE = /\{\{\$row:([a-zA-Z0-9_-]+)\}\}_TOTAL/gi;
-const ROW_CHARGES_REF_RE = /\{\{\$row:([a-zA-Z0-9_-]+)\}\}_CHARGES/gi;
+const TOK_BASE_REF_RE = /\{\{\$tok:([a-zA-Z0-9_-]+)\}\}_BASE/gi;
+const TOK_CHARGES_REF_RE = /\{\{\$tok:([a-zA-Z0-9_-]+)\}\}_CHARGES/gi;
+const TOK_TOTAL_REF_RE = /\{\{\$tok:([a-zA-Z0-9_-]+)\}\}_TOTAL/gi;
+const TOK_REF_RE = /\{\{\$tok:([a-zA-Z0-9_-]+)\}\}/gi;
 
-const SEC_REF_RE = /\{\{\$sec:([a-zA-Z0-9_-]+)\}\}/gi;
-const SEC_BASE_REF_RE = /\{\{\$sec:([a-zA-Z0-9_-]+)\}\}_BASE/gi;
-const SEC_TOTAL_REF_RE = /\{\{\$sec:([a-zA-Z0-9_-]+)\}\}_TOTAL/gi;
-const SEC_CHARGES_REF_RE = /\{\{\$sec:([a-zA-Z0-9_-]+)\}\}_CHARGES/gi;
-
-const TPL_REF_RE = /\{\{\$tpl:([a-zA-Z0-9_-]+)\}\}/gi;
-
+/**
+ * Encode: bare or prefixed tokens -> {{$tok:UUID}}
+ * Encodes _BASE, _CHARGES, and _TOTAL suffixes into canonical {{$tok:UUID}}.
+ */
 export function encodeFormula(
   formula: string | null | undefined,
-  rowTokenToId: RowTokenToIdMap = {},
+  tokenMap: TokenMap = {},
   secTokenToId: SecTokenToIdMap = {},
   tplTokenToId: TplTokenToIdMap = {},
   fileFieldTokens: string[] = [],
@@ -51,184 +43,199 @@ export function encodeFormula(
   if (!formula) return null;
 
   let result = formula;
+  const mergedMap: Record<string, string> = {
+    ...tokenMap,
+    ...secTokenToId,
+    ...tplTokenToId,
+  };
 
-  // Encode Constants (TPL_*)
-  const tplTokens = Object.keys(tplTokenToId).sort((a, b) => b.length - a.length);
-  for (const token of tplTokens) {
-    const id = tplTokenToId[token];
-    result = result.replace(new RegExp(`\\b${token}\\b`, "g"), `{{$tpl:${id}}}`);
+  const tokens = Object.keys(mergedMap).sort((a, b) => b.length - a.length);
+
+  for (const token of tokens) {
+    const id = mergedMap[token];
+    // Suffix variants for rows and sections
+    result = result.replace(new RegExp(`\\b${token}_BASE\\b`, "g"), `{{$tok:${id}}}_BASE`);
+    result = result.replace(new RegExp(`\\b${token}_CHARGES\\b`, "g"), `{{$tok:${id}}}_CHARGES`);
+    // _TOTAL maps to bare token
+    result = result.replace(new RegExp(`\\b${token}_TOTAL\\b`, "g"), `{{$tok:${id}}}`);
+    // Bare token
+    result = result.replace(new RegExp(`\\b${token}\\b`, "g"), `{{$tok:${id}}}`);
   }
 
-  // Encode Sections (Encode longer suffixes _BASE, _CHARGES, _TOTAL first!)
-  const secTokens = Object.keys(secTokenToId).sort((a, b) => b.length - a.length);
-  for (const token of secTokens) {
-    const id = secTokenToId[token];
-    result = result.replace(new RegExp(`\\b${token}_BASE\\b`, "g"), `{{$sec:${id}}}_BASE`);
-    result = result.replace(new RegExp(`\\b${token}_CHARGES\\b`, "g"), `{{$sec:${id}}}_CHARGES`);
-    result = result.replace(new RegExp(`\\b${token}_TOTAL\\b`, "g"), `{{$sec:${id}}}`);
-    result = result.replace(new RegExp(`\\b${token}\\b`, "g"), `{{$sec:${id}}}`);
+  // File fields: bare -> FILE_*
+  for (const token of fileFieldTokens) {
+    result = result.replace(new RegExp(`\\b(?<!FILE_)${token}\\b`, "g"), `FILE_${token}`);
   }
 
-  // Encode Rows (Encode longer suffixes _BASE, _CHARGES, _TOTAL first!)
-  const rowTokens = Object.keys(rowTokenToId).sort((a, b) => b.length - a.length);
-  for (const token of rowTokens) {
-    const id = rowTokenToId[token];
-    result = result.replace(new RegExp(`\\b${token}_BASE\\b`, "g"), `{{$row:${id}}}_BASE`);
-    result = result.replace(new RegExp(`\\b${token}_CHARGES\\b`, "g"), `{{$row:${id}}}_CHARGES`);
-    result = result.replace(new RegExp(`\\b${token}_TOTAL\\b`, "g"), `{{$row:${id}}}`);
-    result = result.replace(new RegExp(`\\b${token}\\b`, "g"), `{{$row:${id}}}`);
+  // Global tokens: bare -> GBL_*
+  for (const token of globalTokens) {
+    result = result.replace(new RegExp(`\\b(?<!(GBL_|ORG_))${token}\\b`, "g"), `GBL_${token}`);
   }
 
-  // Encode File Fields (bare token -> FILE_<TOKEN>)
-  const sortedFileTokens = [...fileFieldTokens].sort((a, b) => b.length - a.length);
-  for (const token of sortedFileTokens) {
-    const clean = token.replace(/^FILE_/, "");
-    result = result.replace(new RegExp(`(?<!FILE_)\\b${clean}\\b`, "g"), `FILE_${clean}`);
-  }
-
-  // Encode Global Constants (bare token -> GBL_<TOKEN>)
-  const sortedGlobalTokens = [...globalTokens].sort((a, b) => b.length - a.length);
-  for (const token of sortedGlobalTokens) {
-    const clean = token.replace(/^(GBL_|ORG_)/, "");
-    result = result.replace(new RegExp(`(?<!GBL_)\\b${clean}\\b`, "g"), `GBL_${clean}`);
-  }
-
-  return result;
+  return normalizeFormulaSpacing(result);
 }
 
+/**
+ * Decode: {{$tok:UUID}} -> bare display token
+ */
 export function decodeFormula(
-  storedFormula: string | null | undefined,
-  rowIdToToken: RowIdToTokenMap = {},
+  stored: string | null | undefined,
+  idToToken: IdToTokenMap = {},
   secIdToToken: SecIdToTokenMap = {},
   tplIdToToken: TplIdToTokenMap = {},
-  fileFieldTokens?: string[],
-  globalTokens?: string[],
+  _fileFieldTokens?: string[],
+  _globalTokens?: string[],
 ): string | null {
-  if (!storedFormula) return null;
+  if (!stored) return null;
 
-  let result = storedFormula;
+  const tokenMap: Record<string, string> = {
+    ...idToToken,
+    ...secIdToToken,
+    ...tplIdToToken,
+  };
 
-  // Decode Constants
-  result = result.replace(TPL_REF_RE, (_, id) => {
-    const token = tplIdToToken[id];
-    return token ? token : `{{$tpl:${id}}}`;
-  });
+  let result = stored;
 
-  // Decode Sections
-  result = result.replace(SEC_BASE_REF_RE, (_, id) => {
-    const token = secIdToToken[id];
-    return token ? `${token}_BASE` : `{{$sec:${id}}}_BASE`;
+  // Unified {{$tok:UUID}}
+  result = result.replace(TOK_BASE_REF_RE, (_, id) => {
+    const token = tokenMap[id];
+    return token ? `${token}_BASE` : `{{$tok:${id}}}_BASE`;
   });
-  result = result.replace(SEC_CHARGES_REF_RE, (_, id) => {
-    const token = secIdToToken[id];
-    return token ? `${token}_CHARGES` : `{{$sec:${id}}}_CHARGES`;
+  result = result.replace(TOK_CHARGES_REF_RE, (_, id) => {
+    const token = tokenMap[id];
+    return token ? `${token}_CHARGES` : `{{$tok:${id}}}_CHARGES`;
   });
-  result = result.replace(SEC_TOTAL_REF_RE, (_, id) => {
-    const token = secIdToToken[id];
-    return token ? token : `{{$sec:${id}}}`;
+  result = result.replace(TOK_TOTAL_REF_RE, (_, id) => {
+    const token = tokenMap[id];
+    return token ? token : `{{$tok:${id}}}`;
   });
-  result = result.replace(SEC_REF_RE, (_, id) => {
-    const token = secIdToToken[id];
-    return token ? token : `{{$sec:${id}}}`;
-  });
-
-  // Decode Rows
-  result = result.replace(ROW_BASE_REF_RE, (_, id) => {
-    const token = rowIdToToken[id];
-    return token ? `${token}_BASE` : `{{$row:${id}}}_BASE`;
-  });
-  result = result.replace(ROW_CHARGES_REF_RE, (_, id) => {
-    const token = rowIdToToken[id];
-    return token ? `${token}_CHARGES` : `{{$row:${id}}}_CHARGES`;
-  });
-  result = result.replace(ROW_TOTAL_REF_RE, (_, id) => {
-    const token = rowIdToToken[id];
-    return token ? token : `{{$row:${id}}}`;
-  });
-  result = result.replace(ROW_REF_RE, (_, id) => {
-    const token = rowIdToToken[id];
-    return token ? token : `{{$row:${id}}}`;
+  result = result.replace(TOK_REF_RE, (_, id) => {
+    const token = tokenMap[id];
+    return token ? token : `{{$tok:${id}}}`;
   });
 
-  // Decode File Fields (FILE_<TOKEN> -> bare <TOKEN>)
-  if (fileFieldTokens && fileFieldTokens.length > 0) {
-    const sortedFileTokens = [...fileFieldTokens].sort((a, b) => b.length - a.length);
-    for (const token of sortedFileTokens) {
-      const clean = token.replace(/^FILE_/, "");
-      result = result.replace(new RegExp(`\\bFILE_${clean}\\b`, "g"), clean);
-    }
-  } else {
-    // Strip FILE_ prefix generally
-    result = result.replace(/\bFILE_([A-Z0-9_]+)\b/g, "$1");
-  }
+  // Decode prefixes to bare tokens
+  result = result.replace(/\bFILE_([A-Z0-9_]+)\b/g, "$1");
+  result = result.replace(/\b(?:GBL_|ORG_)([A-Z0-9_]+)\b/g, "$1");
+  result = result.replace(/\bEXP_(?!TOTAL\b)([A-Z0-9_]+)\b/g, "$1");
 
-  // Decode Global Constants (GBL_<TOKEN> or legacy ORG_<TOKEN> -> bare <TOKEN>)
-  if (globalTokens && globalTokens.length > 0) {
-    const sortedGlobalTokens = [...globalTokens].sort((a, b) => b.length - a.length);
-    for (const token of sortedGlobalTokens) {
-      const clean = token.replace(/^(GBL_|ORG_)/, "");
-      result = result.replace(new RegExp(`\\b(?:GBL_|ORG_)${clean}\\b`, "g"), clean);
-    }
-  } else {
-    // Strip GBL_ or ORG_ prefix generally
-    result = result.replace(/\b(?:GBL_|ORG_)([A-Z0-9_]+)\b/g, "$1");
-  }
-
-  return result;
+  return normalizeFormulaSpacing(result);
 }
 
+/**
+ * Decode for engine evaluation: {{$tok:UUID}} -> prefixed engine token
+ * e.g. UUID of TRANSPORTATION -> "EXP_TRANSPORTATION"
+ *      UUID of VAT_RATE (global) -> "GBL_VAT_RATE"
+ *      UUID of PORT_DUES (row) -> "PORT_DUES" (rows stay bare in engine scope)
+ */
 export function decodeFormulaForEval(
-  storedFormula: string | null | undefined,
-  rowIdToToken: RowIdToTokenMap = {},
+  stored: string | null | undefined,
+  idToEvalToken: IdToEvalTokenMap = {},
   secIdToToken: SecIdToTokenMap = {},
   tplIdToToken: TplIdToTokenMap = {},
 ): string {
-  if (!storedFormula) return "";
+  if (!stored) return "";
 
-  let result = storedFormula;
+  const evalMap: Record<string, string> = { ...idToEvalToken };
+  for (const [id, tok] of Object.entries(secIdToToken)) {
+    if (!evalMap[id]) evalMap[id] = tok;
+  }
+  for (const [id, tok] of Object.entries(tplIdToToken)) {
+    if (!evalMap[id]) evalMap[id] = tok.startsWith("TPL_") ? tok : `TPL_${tok}`;
+  }
 
-  // Constants decoded to TPL_<TOKEN> (matching backend calculation scope)
-  result = result.replace(TPL_REF_RE, (_, id) => {
-    const token = tplIdToToken[id];
-    return token ? `TPL_${token.replace(/^TPL_/, "")}` : `{{$tpl:${id}}}`;
-  });
+  let result = stored;
 
-  // Sections
-  result = result.replace(SEC_BASE_REF_RE, (_, id) => {
-    const token = secIdToToken[id];
-    return token ? `${token}_BASE` : `{{$sec:${id}}}_BASE`;
+  // Unified {{$tok:UUID}}
+  result = result.replace(TOK_BASE_REF_RE, (_, id) => {
+    const token = evalMap[id];
+    return token ? `${token}_BASE` : `{{$tok:${id}}}_BASE`;
   });
-  result = result.replace(SEC_CHARGES_REF_RE, (_, id) => {
-    const token = secIdToToken[id];
-    return token ? `${token}_CHARGES` : `{{$sec:${id}}}_CHARGES`;
+  result = result.replace(TOK_CHARGES_REF_RE, (_, id) => {
+    const token = evalMap[id];
+    return token ? `${token}_CHARGES` : `{{$tok:${id}}}_CHARGES`;
   });
-  result = result.replace(SEC_TOTAL_REF_RE, (_, id) => {
-    const token = secIdToToken[id];
-    return token ? token : `{{$sec:${id}}}`;
+  result = result.replace(TOK_TOTAL_REF_RE, (_, id) => {
+    const token = evalMap[id];
+    return token ? token : `{{$tok:${id}}}`;
   });
-  result = result.replace(SEC_REF_RE, (_, id) => {
-    const token = secIdToToken[id];
-    return token ? token : `{{$sec:${id}}}`;
-  });
-
-  // Rows
-  result = result.replace(ROW_BASE_REF_RE, (_, id) => {
-    const token = rowIdToToken[id];
-    return token ? `${token}_BASE` : `{{$row:${id}}}_BASE`;
-  });
-  result = result.replace(ROW_CHARGES_REF_RE, (_, id) => {
-    const token = rowIdToToken[id];
-    return token ? `${token}_CHARGES` : `{{$row:${id}}}_CHARGES`;
-  });
-  result = result.replace(ROW_TOTAL_REF_RE, (_, id) => {
-    const token = rowIdToToken[id];
-    return token ? token : `{{$row:${id}}}`;
-  });
-  result = result.replace(ROW_REF_RE, (_, id) => {
-    const token = rowIdToToken[id];
-    return token ? token : `{{$row:${id}}}`;
+  result = result.replace(TOK_REF_RE, (_, id) => {
+    const token = evalMap[id];
+    return token ? token : `{{$tok:${id}}}`;
   });
 
-  // FILE_* and GBL_* remain intact with prefixes for the engine
-  return result;
+  return normalizeFormulaSpacing(result);
+}
+
+/**
+ * Rigorously normalizes mathematical formula whitespace into canonical delimiter-owned spacing.
+ * Rules:
+ *  1. Binary operators (+, -, *, /, //, %) have strictly one space on either side.
+ *  2. Unary minus clings to its operand (-10, (-5), *-2).
+ *  3. Parentheses have zero internal padding: (A + B), never ( A + B ).
+ *  4. Function calls have zero space before '(': CLAMP(x, min, max), never CLAMP (x).
+ *  5. Function arguments are delimited by comma and single space: ", ".
+ *  6. Percentage syntactic sugar clings to numbers: "50%", "0.15%".
+ *  7. Encoded tokens ({{$tok:...}}) preserve their delimiters cleanly.
+ *  8. Redundant multiple spaces and edge whitespace are eliminated.
+ */
+export function normalizeFormulaSpacing(formula: string | null | undefined): string {
+  if (!formula || typeof formula !== "string") return "";
+
+  let result = formula.trim();
+  if (result.length === 0) return "";
+
+  // 1. Collapse multiple whitespace characters into single space
+  result = result.replace(/\s+/g, " ");
+
+  // 2. Shield encoded storage tags (e.g. {{$tok:uuid-with-hyphens}})
+  const tags: string[] = [];
+  result = result.replace(/\{\{.*?\}\}/g, (match) => {
+    tags.push(match);
+    return `__FORMULA_TAG_${tags.length - 1}__`;
+  });
+
+  // 3. Shield percentage attached to pure numeric literals (e.g. "50%", "0.15%")
+  const percentages: string[] = [];
+  result = result.replace(
+    /(^|[^A-Za-z0-9_])(\d+(?:\.\d+)?)\s*%(?!\s*[A-Za-z0-9_(])/g,
+    (_, prefix, num) => {
+      percentages.push(`${num}%`);
+      return `${prefix}__PERCENTAGE_${percentages.length - 1}__`;
+    },
+  );
+
+  // 4. Protect and normalize modulo operator `//`
+  result = result.replace(/\s*\/\/\s*/g, " __MODULO__ ");
+
+  // 5. Binary operators: +, *, /, and modulo % (which was not shielded as percentage)
+  result = result.replace(/\s*([+*/%])\s*/g, " $1 ");
+
+  // 6. Binary minus vs unary minus:
+  result = result.replace(/([A-Za-z0-9_.)%\]])\s*-\s*/g, "$1 - ");
+  result = result.replace(/([+*/(,]|\b__MODULO__\b)\s*-\s*([A-Za-z0-9_])/g, "$1 -$2");
+  result = result.replace(/^-\s*([A-Za-z0-9_])/g, "-$1");
+
+  // Restore modulo operator
+  result = result.replace(/\s*__MODULO__\s*/g, " // ");
+
+  // Restore percentages
+  result = result.replace(/__PERCENTAGE_(\d+)__/g, (_, idx) => percentages[Number(idx)] || "");
+
+  // Restore storage tags
+  result = result.replace(/__FORMULA_TAG_(\d+)__/g, (_, idx) => tags[Number(idx)] || "");
+
+  // 7. Parentheses:
+  result = result.replace(/\(\s+/g, "(");
+  result = result.replace(/\s+\)/g, ")");
+  result = result.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\s+\(/g, "$1(");
+  result = result.replace(/\)(?=[A-Za-z0-9_])/g, ") ");
+
+  // 8. Commas: zero space before, exactly one space after
+  result = result.replace(/\s*,\s*/g, ", ");
+
+  // 9. Clean up any accidental double spaces
+  result = result.replace(/\s{2,}/g, " ");
+
+  return result.trim();
 }

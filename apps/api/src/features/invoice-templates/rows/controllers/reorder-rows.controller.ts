@@ -1,7 +1,8 @@
-import { db, invoiceTemplates, templateRows, templateSections } from "@starter/db";
+import { db, invoiceTemplates, templateSections, tokens } from "@starter/db";
 import { and, eq } from "drizzle-orm";
 import { Context } from "hono";
 import { z } from "zod";
+import { resequenceTemplateRowTokens } from "../services/resequence-rows.service";
 
 export async function reorderRows(c: Context) {
   const sectionId = c.req.param("sectionId") as string;
@@ -19,6 +20,8 @@ export async function reorderRows(c: Context) {
     .limit(1);
   if (secResult.length === 0) return c.json({ error: "Section not found" }, 404);
 
+  const templateId = secResult[0].section.templateId;
+
   const body = await c.req.json();
   const parsed = z.object({ orderedIds: z.array(z.string().uuid()) }).safeParse(body);
   if (!parsed.success) return c.json({ error: parsed.error }, 400);
@@ -29,13 +32,13 @@ export async function reorderRows(c: Context) {
   await db.transaction(async (tx) => {
     await Promise.all(
       orderedIds.map((id, index) =>
-        tx
-          .update(templateRows)
-          .set({ sortOrder: index })
-          .where(and(eq(templateRows.id, id), eq(templateRows.sectionId, sectionId))),
+        tx.update(tokens).set({ sortOrder: index }).where(eq(tokens.id, id)),
       ),
     );
   });
+
+  // Automatically resequence row tokens to match their updated serial numbers
+  await resequenceTemplateRowTokens(templateId);
 
   return c.json({ success: true });
 }

@@ -30,11 +30,18 @@ export const invoiceKeys = {
   // Drafts
   drafts: {
     byProject: (projectId: string) => ["invoice-drafts", "project", projectId] as const,
+    syncStatus: (draftId: string) => ["draft-sync-status", draftId] as const,
   },
 
   // Invoices
   invoices: {
     list: (projectId: string) => ["invoices", "list", projectId] as const,
     detail: (id: string) => ["invoices", "detail", id] as const,
+  },
+
+  // Optional Rows
+  optionalRows: {
+    byDraft: (draftId: string) => ["draft-optional-rows", draftId] as const,
+    byTemplate: (templateId: string) => ["template-optional-rows", templateId] as const,
   },
 };

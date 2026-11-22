@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getCircularDependencyTokens, type TokenMap } from "@/lib/formula-evaluator";
+import { TemplateColumnDefinition } from "./sheet-builder/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,8 +12,9 @@ import { getCircularDependencyTokens, type TokenMap } from "@/lib/formula-evalua
  */
 export type SelectedCell = {
   // ── Routing ───────────────────────────────────────────────────────────────
-  templateId: string;
-  sectionId: string;
+  templateId?: string;
+  draftId?: string;
+  sectionId?: string;
   rowId: string;
   /** Full row object — needed to PATCH the row atomically. */
   row: any;
@@ -20,6 +22,10 @@ export type SelectedCell = {
   chargeId?: string;
   /** True if this is a section charge (has no parent row). */
   isSectionCharge?: boolean;
+  /** True if this is a catalog item in the Additional Line Items panel. */
+  isCatalogItem?: boolean;
+  /** Sheet column key if this cell is in a customizable sheet template */
+  columnKey?: string;
 
   // ── Display ───────────────────────────────────────────────────────────────
   /** Human-readable breadcrumb shown on the left side of the formula bar.
@@ -45,6 +51,7 @@ export type ExternalTokens = {
   global: Set<string>;
   template: Set<string>;
   file: Set<string>;
+  category: Set<string>;
 };
 
 type BuilderContextValue = {
@@ -52,16 +59,18 @@ type BuilderContextValue = {
   setSelectedCell: (cell: SelectedCell | null) => void;
   /** Live token map — updated by the workspace whenever sections data changes. */
   tokenMap: TokenMap;
-  setTokenMap: (map: TokenMap) => void;
+  setTokenMap: (map: TokenMap | ((prev: TokenMap) => TokenMap)) => void;
   sections: any[];
-  setSections?: (sections: any[]) => void;
+  setSections?: (sections: any[] | ((prev: any[]) => any[])) => void;
   externalTokens: ExternalTokens;
-  setExternalTokens?: (tokens: ExternalTokens) => void;
+  setExternalTokens?: (tokens: ExternalTokens | ((prev: ExternalTokens) => ExternalTokens)) => void;
   hiddenTokens: Set<string>;
   invalidTokens: Set<string>;
   tokenDisabledReasons: Map<string, string>;
   getTokenDisabledReason: (token: string) => string | undefined;
   tokenPoolOpen: boolean;
+  setTokenPoolOpen?: (open: boolean | ((prev: boolean) => boolean)) => void;
+  openAdditionalLineItemsPanel: () => void;
   apiBasePath: string;
   mode: "template" | "draft" | "preview" | "fill";
   invalidateKey: readonly string[];
@@ -69,12 +78,33 @@ type BuilderContextValue = {
   clipboardToken: string | null;
   setClipboardToken: (token: string | null) => void;
   getTokenColor: (token: string) => string;
+  sidebarTab: "tokens" | "line-items";
+  setSidebarTab: (tab: "tokens" | "line-items") => void;
+  headerFields: any[];
+  setHeaderFields?: (fields: any[]) => void;
+  templateConstants: any[];
+  setTemplateConstants?: (constants: any[]) => void;
+  draftId?: string;
+  templateId?: string;
+  sectionSeparation: "double" | "step" | "none";
+  setSectionSeparation: (style: "double" | "step" | "none") => void;
+  showSectionHeaders: boolean;
+  setShowSectionHeaders: (show: boolean) => void;
+  showSectionSubtotals: boolean;
+  setShowSectionSubtotals: (show: boolean) => void;
+  templateType?: "standard" | "general" | "sheet";
+  columnDefinitions?: TemplateColumnDefinition[];
+  setColumnDefinitions?: (cols: TemplateColumnDefinition[]) => void;
+  sidebarDisplayMode: "overlay" | "static";
+  setSidebarDisplayMode: (mode: "overlay" | "static") => void;
+  toggleSidebarDisplayMode: () => void;
 };
 
 const DEFAULT_EXTERNAL_TOKENS: ExternalTokens = {
   global: new Set(),
   template: new Set(),
   file: new Set(),
+  category: new Set(),
 };
 
 const BuilderContext = createContext<BuilderContextValue>({
@@ -90,38 +120,190 @@ const BuilderContext = createContext<BuilderContextValue>({
   tokenDisabledReasons: new Map(),
   getTokenDisabledReason: () => undefined,
   tokenPoolOpen: false,
+  setTokenPoolOpen: () => {},
+  openAdditionalLineItemsPanel: () => {},
+  sidebarTab: "tokens",
+  setSidebarTab: () => {},
+  headerFields: [],
+  setHeaderFields: () => {},
+  templateConstants: [],
+  setTemplateConstants: () => {},
   apiBasePath: "",
   mode: "template",
   invalidateKey: [],
   clipboardToken: null,
   setClipboardToken: () => {},
   getTokenColor: () => "text-slate-400",
+  sectionSeparation: "double",
+  setSectionSeparation: () => {},
+  showSectionHeaders: true,
+  setShowSectionHeaders: () => {},
+  showSectionSubtotals: false,
+  setShowSectionSubtotals: () => {},
+  templateType: "standard",
+  columnDefinitions: [],
+  setColumnDefinitions: () => {},
+  sidebarDisplayMode: "static",
+  setSidebarDisplayMode: () => {},
+  toggleSidebarDisplayMode: () => {},
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function BuilderProvider({
+  templateId,
+  draftId,
   tokenPoolOpen = false,
+  setTokenPoolOpen,
   apiBasePath,
   mode = "template",
   invalidateKey,
   validationErrors = [],
+  templateType = "standard",
+  columnDefinitions = [],
+  sidebarDisplayMode: propSidebarDisplayMode,
+  setSidebarDisplayMode: propSetSidebarDisplayMode,
+  onToggleSidebarDisplayMode: propOnToggleSidebarDisplayMode,
   children,
 }: {
   templateId?: string;
   draftId?: string;
   tokenPoolOpen?: boolean;
+  setTokenPoolOpen?: (open: boolean | ((prev: boolean) => boolean)) => void;
   apiBasePath: string;
   mode?: "template" | "draft" | "preview" | "fill";
   invalidateKey: readonly string[];
   validationErrors?: any[];
+  templateType?: "standard" | "general" | "sheet";
+  columnDefinitions?: TemplateColumnDefinition[];
+  sidebarDisplayMode?: "overlay" | "static";
+  setSidebarDisplayMode?: (mode: "overlay" | "static") => void;
+  onToggleSidebarDisplayMode?: () => void;
   children: React.ReactNode;
 }) {
+  const [internalDisplayMode, setInternalDisplayMode] = useState<"overlay" | "static">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("starter_studio_sidebar_display_mode");
+      if (saved === "overlay" || saved === "static") return saved;
+    }
+    return "static";
+  });
+
+  const effectiveDisplayMode = propSidebarDisplayMode ?? internalDisplayMode;
+
+  const handleSetDisplayMode = useCallback(
+    (newMode: "overlay" | "static") => {
+      if (propSetSidebarDisplayMode) {
+        propSetSidebarDisplayMode(newMode);
+      } else {
+        setInternalDisplayMode(newMode);
+      }
+      if (typeof window !== "undefined") {
+        localStorage.setItem("starter_studio_sidebar_display_mode", newMode);
+      }
+    },
+    [propSetSidebarDisplayMode],
+  );
+
+  const handleToggleDisplayMode = useCallback(() => {
+    if (propOnToggleSidebarDisplayMode) {
+      propOnToggleSidebarDisplayMode();
+    } else {
+      const next = effectiveDisplayMode === "overlay" ? "static" : "overlay";
+      handleSetDisplayMode(next);
+    }
+  }, [propOnToggleSidebarDisplayMode, effectiveDisplayMode, handleSetDisplayMode]);
+
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
-  const [tokenMap, setTokenMap] = useState<TokenMap>({});
-  const [sections, setSections] = useState<any[]>([]);
+  const [columns, setColumns] = useState<TemplateColumnDefinition[]>(columnDefinitions);
+
+  useEffect(() => {
+    setColumns(columnDefinitions);
+  }, [columnDefinitions]);
+  const [tokenMap, setTokenMapState] = useState<TokenMap>({});
+  const [sections, setSectionsState] = useState<any[]>([]);
   const [clipboardToken, setClipboardToken] = useState<string | null>(null);
-  const [externalTokens, setExternalTokens] = useState<ExternalTokens>(DEFAULT_EXTERNAL_TOKENS);
+  const [sidebarTab, setSidebarTab] = useState<"tokens" | "line-items">("tokens");
+  const [headerFields, setHeaderFieldsState] = useState<any[]>([]);
+  const [templateConstants, setTemplateConstantsState] = useState<any[]>([]);
+  const [externalTokens, setExternalTokensState] =
+    useState<ExternalTokens>(DEFAULT_EXTERNAL_TOKENS);
+  const [sectionSeparation, setSectionSeparation] = useState<"double" | "step" | "none">("double");
+  const [showSectionHeaders, setShowSectionHeaders] = useState(true);
+  const [showSectionSubtotals, setShowSectionSubtotals] = useState(false);
+
+  const setHeaderFields = useCallback((fieldsOrFn: any[] | ((prev: any[]) => any[])) => {
+    setHeaderFieldsState((prev) => {
+      const next = typeof fieldsOrFn === "function" ? fieldsOrFn(prev) : fieldsOrFn;
+      if (prev === next) return prev;
+      if (prev.length === next.length && prev.every((item, i) => item === next[i])) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
+  const setTemplateConstants = useCallback((constsOrFn: any[] | ((prev: any[]) => any[])) => {
+    setTemplateConstantsState((prev) => {
+      const next = typeof constsOrFn === "function" ? constsOrFn(prev) : constsOrFn;
+      if (prev === next) return prev;
+      if (prev.length === next.length && prev.every((item, i) => item === next[i])) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
+  const setTokenMap = useCallback((mapOrFn: TokenMap | ((prev: TokenMap) => TokenMap)) => {
+    setTokenMapState((prev) => {
+      const next = typeof mapOrFn === "function" ? mapOrFn(prev) : mapOrFn;
+      if (prev === next) return prev;
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length === nextKeys.length && prevKeys.every((k) => prev[k] === next[k])) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
+  const setSections = useCallback((sectionsOrFn: any[] | ((prev: any[]) => any[])) => {
+    setSectionsState((prev) => {
+      const next = typeof sectionsOrFn === "function" ? sectionsOrFn(prev) : sectionsOrFn;
+      if (prev === next) return prev;
+      if (prev.length === next.length && prev.every((item, i) => item === next[i])) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
+  const setExternalTokens = useCallback(
+    (tokensOrFn: ExternalTokens | ((prev: ExternalTokens) => ExternalTokens)) => {
+      setExternalTokensState((prev) => {
+        const next = typeof tokensOrFn === "function" ? tokensOrFn(prev) : tokensOrFn;
+        if (prev === next) return prev;
+        const areSetsEqual = (a: Set<string>, b: Set<string>) =>
+          a.size === b.size && Array.from(a).every((x) => b.has(x));
+
+        if (
+          areSetsEqual(prev.global, next.global) &&
+          areSetsEqual(prev.template, next.template) &&
+          areSetsEqual(prev.file, next.file) &&
+          areSetsEqual(prev.category, next.category)
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const openAdditionalLineItemsPanel = useCallback(() => {
+    if (setTokenPoolOpen) setTokenPoolOpen(true);
+    setSidebarTab("line-items");
+  }, [setTokenPoolOpen]);
 
   const tokenTypes = useMemo(() => {
     const rowBases = new Set<string>();
@@ -134,22 +316,28 @@ export function BuilderProvider({
     const secTotals = new Set<string>();
     const secChargeItems = new Set<string>();
 
+    const isSheet = templateType === "sheet" || templateType === "general";
+
     for (const sec of sections) {
       if (sec.sectionToken) {
         secTotals.add(`SEC_${sec.sectionToken}`);
-        secBases.add(`SEC_${sec.sectionToken}_BASE`);
-        secChargeTotals.add(`SEC_${sec.sectionToken}_CHARGES`);
-        for (const charge of sec.charges || []) {
-          secChargeItems.add(charge.chargeToken);
+        if (!isSheet) {
+          secBases.add(`SEC_${sec.sectionToken}_BASE`);
+          secChargeTotals.add(`SEC_${sec.sectionToken}_CHARGES`);
+          for (const charge of sec.sectionCharges || []) {
+            secChargeItems.add(charge.chargeToken);
+          }
         }
       }
       for (const row of sec.rows || []) {
         if (row.rowToken) {
           rowTotals.add(row.rowToken);
-          rowBases.add(`${row.rowToken}_BASE`);
-          rowChargeTotals.add(`${row.rowToken}_CHARGES`);
-          for (const charge of row.charges || []) {
-            rowChargeItems.add(charge.chargeToken);
+          if (!isSheet) {
+            rowBases.add(`${row.rowToken}_BASE`);
+            rowChargeTotals.add(`${row.rowToken}_CHARGES`);
+            for (const charge of row.charges || []) {
+              rowChargeItems.add(charge.chargeToken);
+            }
           }
         }
       }
@@ -164,10 +352,14 @@ export function BuilderProvider({
       secTotals,
       secChargeItems,
     };
-  }, [sections]);
+  }, [sections, templateType]);
 
   const getTokenColor = useCallback(
     (token: string) => {
+      if (["MIN", "MAX", "ROUND", "CLAMP", "ABS", "FLOOR", "CEIL"].includes(token))
+        return "text-amber-400 font-semibold";
+      if (token === "EXP_TOTAL") return "text-rose-400 font-semibold";
+      if (externalTokens.category?.has(token) || token.startsWith("EXP_")) return "text-rose-400";
       if (externalTokens.global.has(token) || token.startsWith("GBL_")) return "text-indigo-400";
       if (externalTokens.template.has(token) || token.startsWith("TPL_")) return "text-blue-400";
       if (externalTokens.file.has(token) || token.startsWith("FILE_")) return "text-sky-400";
@@ -183,8 +375,8 @@ export function BuilderProvider({
       // Row tokens
       if (t.rowBases.has(token)) return "text-violet-400 font-semibold";
       if (t.rowTotals.has(token)) return "text-slate-400 font-bold";
-      if (t.rowChargeTotals.has(token)) return "text-accent-foreground font-medium";
-      if (t.rowChargeItems.has(token)) return "text-accent-foreground/70";
+      if (t.rowChargeTotals.has(token)) return "text-amber-400 font-medium";
+      if (t.rowChargeItems.has(token)) return "text-amber-400/70";
 
       // Fallbacks if token missing from AST but looks like one
       if (token.startsWith("SEC_")) {
@@ -193,7 +385,7 @@ export function BuilderProvider({
         return "text-slate-400 font-bold";
       }
       if (token.endsWith("_BASE")) return "text-violet-400 font-semibold";
-      if (token.endsWith("_CHARGES")) return "text-accent-foreground font-medium";
+      if (token.endsWith("_CHARGES")) return "text-amber-400 font-medium";
 
       return "text-slate-400 font-bold";
     },
@@ -241,40 +433,58 @@ export function BuilderProvider({
 
     // 2. Self and own row/section charge exclusions
     if (selectedCell.token) {
-      const clean = selectedCell.token.replace(/_(BASE|TOTAL|CHARGES)$/, "");
-      const selfTokens = [
-        selectedCell.token,
-        clean,
-        `${clean}_BASE`,
-        `${clean}_CHARGES`,
-        `${clean}_TOTAL`,
-      ];
-      for (const t of selfTokens) {
-        set.add(t);
-        reasons.set(t, "Cannot reference the active cell's own token");
+      if (selectedCell.chargeId) {
+        // Active cell is a row charge: only the charge itself is a self-reference!
+        set.add(selectedCell.token);
+        reasons.set(selectedCell.token, "Cannot reference the active charge's own token");
+      } else {
+        const isCanonicalRowToken = selectedCell.row?.rowToken === selectedCell.token;
+        const clean = isCanonicalRowToken
+          ? selectedCell.token
+          : selectedCell.token.replace(/_(BASE|TOTAL|CHARGES)$/, "");
+        const selfTokens = [
+          selectedCell.token,
+          clean,
+          `${clean}_BASE`,
+          `${clean}_CHARGES`,
+          `${clean}_TOTAL`,
+        ];
+        for (const t of selfTokens) {
+          set.add(t);
+          reasons.set(t, "Cannot reference the active cell's own token");
+        }
       }
     }
 
-    // If editing a row (base or charge):
+    // If editing a row:
     if (selectedCell.row) {
       const rowToken = selectedCell.row.rowToken;
       const rowLabel = selectedCell.row.label || rowToken || "active row";
       if (rowToken) {
-        const rowTokens = [
-          rowToken,
-          `${rowToken}_BASE`,
-          `${rowToken}_CHARGES`,
-          `${rowToken}_TOTAL`,
-        ];
-        for (const t of rowTokens) {
-          set.add(t);
-          if (!reasons.has(t)) {
-            reasons.set(t, `Cannot reference tokens of active row "${rowLabel}"`);
+        if (selectedCell.chargeId) {
+          // Editing a row charge:
+          // CAN reference rowToken and rowToken_BASE.
+          // CANNOT reference rowToken_CHARGES or rowToken_TOTAL.
+          set.add(`${rowToken}_CHARGES`);
+          reasons.set(`${rowToken}_CHARGES`, `Row charge cannot reference row charges sum`);
+          set.add(`${rowToken}_TOTAL`);
+          reasons.set(`${rowToken}_TOTAL`, `Row charge cannot reference row total`);
+        } else {
+          // Editing row base itself:
+          const rowTokens = [
+            rowToken,
+            `${rowToken}_BASE`,
+            `${rowToken}_CHARGES`,
+            `${rowToken}_TOTAL`,
+          ];
+          for (const t of rowTokens) {
+            set.add(t);
+            if (!reasons.has(t)) {
+              reasons.set(t, `Cannot reference tokens of active row "${rowLabel}"`);
+            }
           }
-        }
 
-        // If editing row base, also exclude all charges of that row
-        if (!selectedCell.chargeId) {
+          // If editing row base, also exclude all charges of that row
           for (const c of selectedCell.row.charges || []) {
             if (c.chargeToken) {
               set.add(c.chargeToken);
@@ -291,7 +501,7 @@ export function BuilderProvider({
     // If editing a section charge:
     if (selectedCell.isSectionCharge && selectedCell.sectionId) {
       const sec = sections.find((s) => s.id === selectedCell.sectionId);
-      if (sec && sec.sectionToken) {
+      if (sec?.sectionToken) {
         const secTokens = [
           sec.sectionToken,
           `SEC_${sec.sectionToken}`,
@@ -329,28 +539,87 @@ export function BuilderProvider({
   );
 
   // Expose context
-  const value = {
-    selectedCell,
-    setSelectedCell,
-    tokenMap,
-    setTokenMap,
-    sections,
-    setSections,
-    externalTokens,
-    setExternalTokens,
-    hiddenTokens,
-    invalidTokens,
-    tokenDisabledReasons,
-    getTokenDisabledReason,
-    tokenPoolOpen,
-    apiBasePath,
-    mode,
-    invalidateKey,
-    validationErrors,
-    clipboardToken,
-    setClipboardToken,
-    getTokenColor,
-  };
+  const value = useMemo(
+    () => ({
+      selectedCell,
+      setSelectedCell,
+      tokenMap,
+      setTokenMap,
+      sections,
+      setSections,
+      externalTokens,
+      setExternalTokens,
+      hiddenTokens,
+      invalidTokens,
+      tokenDisabledReasons,
+      getTokenDisabledReason,
+      tokenPoolOpen,
+      setTokenPoolOpen,
+      openAdditionalLineItemsPanel,
+      apiBasePath,
+      mode,
+      invalidateKey,
+      validationErrors,
+      clipboardToken,
+      setClipboardToken,
+      getTokenColor,
+      sidebarTab,
+      setSidebarTab,
+      headerFields,
+      setHeaderFields,
+      templateConstants,
+      setTemplateConstants,
+      draftId,
+      templateId,
+      sectionSeparation,
+      setSectionSeparation,
+      showSectionHeaders,
+      setShowSectionHeaders,
+      showSectionSubtotals,
+      setShowSectionSubtotals,
+      templateType: templateType === "sheet" ? "general" : templateType,
+      columnDefinitions: columns,
+      setColumnDefinitions: setColumns,
+      sidebarDisplayMode: effectiveDisplayMode,
+      setSidebarDisplayMode: handleSetDisplayMode,
+      toggleSidebarDisplayMode: handleToggleDisplayMode,
+    }),
+    [
+      selectedCell,
+      tokenMap,
+      setTokenMap,
+      sections,
+      setSections,
+      externalTokens,
+      setExternalTokens,
+      hiddenTokens,
+      invalidTokens,
+      tokenDisabledReasons,
+      getTokenDisabledReason,
+      tokenPoolOpen,
+      setTokenPoolOpen,
+      openAdditionalLineItemsPanel,
+      sidebarTab,
+      headerFields,
+      templateConstants,
+      apiBasePath,
+      mode,
+      invalidateKey,
+      validationErrors,
+      clipboardToken,
+      getTokenColor,
+      draftId,
+      templateId,
+      sectionSeparation,
+      showSectionHeaders,
+      showSectionSubtotals,
+      templateType,
+      columns,
+      effectiveDisplayMode,
+      handleSetDisplayMode,
+      handleToggleDisplayMode,
+    ],
+  );
 
   return <BuilderContext.Provider value={value}>{children}</BuilderContext.Provider>;
 }
@@ -365,28 +634,41 @@ export function useBuilderContext(): BuilderContextValue {
 
 export function cellFromRow({
   templateId,
+  draftId,
   sectionId,
   row,
   decodedFormula,
+  columnKey,
+  columnLabel,
 }: {
-  templateId: string;
+  templateId?: string;
+  draftId?: string;
   sectionId: string;
   row: any;
   decodedFormula?: string;
+  columnKey?: string;
+  columnLabel?: string;
 }): SelectedCell {
   const isFormula = row.valueType === "formula";
+  const rowName = row.label || row.rowToken || "Untitled Row";
+  const breadcrumb = columnLabel ? `${rowName} > ${columnLabel}` : rowName;
+
+  const currentVal =
+    columnKey && row.cellValues?.[columnKey] !== undefined
+      ? row.cellValues[columnKey]
+      : row.initialValue;
 
   return {
     templateId,
+    draftId,
     sectionId,
     rowId: row.id,
     row,
+    columnKey,
     token: row.rowToken,
-    breadcrumb: row.label || "Untitled Row",
+    breadcrumb,
     valueType: isFormula ? "formula" : "normal",
-    currentInput: isFormula
-      ? `${decodedFormula ?? row.formula ?? ""}`
-      : String(row.initialValue ?? ""),
+    currentInput: isFormula ? `${decodedFormula ?? row.formula ?? ""}` : String(currentVal ?? ""),
   };
 }
 

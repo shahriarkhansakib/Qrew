@@ -57,10 +57,41 @@ invoiceTemplatesRouter.patch(
   InvoiceTemplatesController.updateTemplate,
 );
 
+invoiceTemplatesRouter.put(
+  "/:id/columns",
+  requireOrgPermission("finance:manage_invoices"),
+  InvoiceTemplatesController.updateColumns,
+);
+
 invoiceTemplatesRouter.delete(
   "/:id",
   requireOrgPermission("finance:manage_invoices"),
   InvoiceTemplatesController.deleteTemplate,
+);
+
+// ── Optional Service Rows (Catalog) ──────────────────────────────────────────
+invoiceTemplatesRouter.get(
+  "/:id/optional-rows",
+  requireOrgPermission(["template:view", "invoice:view", "finance:view_invoices"]),
+  InvoiceTemplatesController.listOptionalRows,
+);
+
+invoiceTemplatesRouter.post(
+  "/:id/optional-rows",
+  requireOrgPermission(["template:edit", "finance:manage_invoices"]),
+  InvoiceTemplatesController.addOptionalRow,
+);
+
+invoiceTemplatesRouter.patch(
+  "/:id/optional-rows/:optionalRowId",
+  requireOrgPermission(["template:edit", "finance:manage_invoices"]),
+  InvoiceTemplatesController.updateOptionalRow,
+);
+
+invoiceTemplatesRouter.delete(
+  "/:id/optional-rows/:optionalRowId",
+  requireOrgPermission(["template:edit", "finance:manage_invoices"]),
+  InvoiceTemplatesController.deleteOptionalRow,
 );
 
 // ── Header Fields ─────────────────────────────────────────────────────────────

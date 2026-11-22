@@ -8,6 +8,7 @@ import {
   templateRows,
   templateSectionCharges,
   templateSections,
+  tokens,
 } from "@starter/db";
 import { eq, inArray } from "drizzle-orm";
 import { DagValidatorService } from "./dag-validator.service";
@@ -19,31 +20,75 @@ export async function validateTemplateDag(
 ): Promise<DagValidationResult> {
   const [dbSections, dbRows, dbSectionCharges, dbConstants] = await Promise.all([
     tx
-      .select()
+      .select({
+        id: templateSections.id,
+        templateId: templateSections.templateId,
+        sectionToken: tokens.tokenKey,
+        label: tokens.label,
+        sortOrder: tokens.sortOrder,
+      })
       .from(templateSections)
+      .innerJoin(tokens, eq(tokens.id, templateSections.id))
       .where(eq(templateSections.templateId, templateId))
-      .orderBy(templateSections.sortOrder),
+      .orderBy(tokens.sortOrder),
     tx
-      .select()
+      .select({
+        id: templateRows.id,
+        templateId: templateRows.templateId,
+        sectionId: templateRows.sectionId,
+        valueType: templateRows.valueType,
+        formula: templateRows.formula,
+        initialValue: templateRows.initialValue,
+        rowToken: tokens.tokenKey,
+        label: tokens.label,
+        sortOrder: tokens.sortOrder,
+      })
       .from(templateRows)
+      .innerJoin(tokens, eq(tokens.id, templateRows.id))
       .where(eq(templateRows.templateId, templateId))
-      .orderBy(templateRows.sortOrder),
+      .orderBy(tokens.sortOrder),
     tx
-      .select()
+      .select({
+        id: templateSectionCharges.id,
+        templateId: templateSectionCharges.templateId,
+        sectionId: templateSectionCharges.sectionId,
+        formula: templateSectionCharges.formula,
+        chargeToken: tokens.tokenKey,
+        label: tokens.label,
+        sortOrder: tokens.sortOrder,
+      })
       .from(templateSectionCharges)
+      .innerJoin(tokens, eq(tokens.id, templateSectionCharges.id))
       .where(eq(templateSectionCharges.templateId, templateId))
-      .orderBy(templateSectionCharges.sortOrder),
-    tx.select().from(templateConstants).where(eq(templateConstants.templateId, templateId)),
+      .orderBy(tokens.sortOrder),
+    tx
+      .select({
+        id: templateConstants.id,
+        templateId: templateConstants.templateId,
+        token: tokens.tokenKey,
+        name: tokens.label,
+      })
+      .from(templateConstants)
+      .innerJoin(tokens, eq(tokens.id, templateConstants.id))
+      .where(eq(templateConstants.templateId, templateId)),
   ]);
 
   const rowIds = dbRows.map((r: any) => r.id);
   const dbRowCharges =
     rowIds.length > 0
       ? await tx
-          .select()
+          .select({
+            id: templateRowCharges.id,
+            rowId: templateRowCharges.rowId,
+            formula: templateRowCharges.formula,
+            chargeToken: tokens.tokenKey,
+            label: tokens.label,
+            sortOrder: tokens.sortOrder,
+          })
           .from(templateRowCharges)
+          .innerJoin(tokens, eq(tokens.id, templateRowCharges.id))
           .where(inArray(templateRowCharges.rowId, rowIds))
-          .orderBy(templateRowCharges.sortOrder)
+          .orderBy(tokens.sortOrder)
       : [];
 
   const idToToken: RowIdToTokenMap = {};
@@ -107,6 +152,84 @@ export async function validateTemplateDag(
   return DagValidatorService.validate(
     evaluatorSections as any,
     new Set(),
+    idToToken,
+    secIdToToken,
+    tplIdToToken,
+  );
+}
+
+export function validateDraftDag(
+  draft: any,
+  externalTokens: Set<string> = new Set(),
+): DagValidationResult {
+  const sections: any[] = draft.draftSections || [];
+  const constants: any = draft.draftConstants || {};
+
+  const idToToken: RowIdToTokenMap = {};
+  const secIdToToken: SecIdToTokenMap = {};
+  const tplIdToToken: TplIdToTokenMap = {};
+
+  for (const [key, val] of Object.entries(constants as Record<string, any>)) {
+    if (val?.id) {
+      tplIdToToken[val.id] = key;
+    }
+  }
+
+  for (const sec of sections) {
+    if (sec.id && sec.sectionToken) {
+      secIdToToken[sec.id] = `SEC_${sec.sectionToken}`;
+    }
+    for (const r of sec.rows || []) {
+      if (r.id && r.rowToken) {
+        idToToken[r.id] = r.rowToken;
+      }
+      for (const ch of r.charges || []) {
+        if (ch.id && ch.chargeToken) {
+          idToToken[ch.id] = ch.chargeToken;
+        }
+      }
+    }
+    for (const sc of sec.sectionCharges || sec.charges || []) {
+      if (sc.id && sc.chargeToken) {
+        idToToken[sc.id] = sc.chargeToken;
+      }
+    }
+  }
+
+  const evaluatorSections: EvaluatorSection[] = sections.map((sec: any) => ({
+    id: sec.id,
+    sectionToken: sec.sectionToken,
+    sortOrder: sec.sortOrder ?? 0,
+    rows: (sec.rows || []).map((row: any) => ({
+      id: row.id,
+      rowToken: row.rowToken,
+      label: row.label,
+      sectionId: sec.id,
+      valueType: row.valueType,
+      formula: row.formula ?? undefined,
+      initialValue: row.initialValue ?? undefined,
+      manualValue: row.manualValue ?? null,
+      sortOrder: row.sortOrder ?? 0,
+      charges: (row.charges || []).map((rc: any) => ({
+        id: rc.id,
+        chargeToken: rc.chargeToken,
+        label: rc.label,
+        formula: rc.formula ?? undefined,
+        sortOrder: rc.sortOrder ?? 0,
+      })),
+    })),
+    sectionCharges: (sec.sectionCharges || sec.charges || []).map((sc: any) => ({
+      id: sc.id,
+      chargeToken: sc.chargeToken,
+      label: sc.label,
+      formula: sc.formula ?? undefined,
+      sortOrder: sc.sortOrder ?? 0,
+    })),
+  }));
+
+  return DagValidatorService.validate(
+    evaluatorSections,
+    externalTokens,
     idToToken,
     secIdToToken,
     tplIdToToken,

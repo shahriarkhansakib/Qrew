@@ -17,10 +17,10 @@ This document captures the complete, approved end-to-end invoice generation work
 
 There are **two completely separate editing surfaces** that must never bleed into each other:
 
-| Surface | Who Edits | What Gets Changed | Where |
-|---|---|---|---|
-| **Template Configuration** | Admin/Billing Manager | The master template — row formulas, sections, header field definitions, section charges | `/dashboard/invoices/templates/[id]` |
-| **Invoice Draft** | Manager/Staff | A per-file copy of the template data — file-specific field values and manual overrides only. The master template is NEVER modified. | `/dashboard/invoices/drafts/[id]` |
+| Surface                    | Who Edits             | What Gets Changed                                                                                                                   | Where                                |
+| -------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| **Template Configuration** | Admin/Billing Manager | The master template — row formulas, sections, header field definitions, section charges                                             | `/dashboard/invoices/templates/[id]` |
+| **Invoice Draft**          | Manager/Staff         | A per-file copy of the template data — file-specific field values and manual overrides only. The master template is NEVER modified. | `/dashboard/invoices/drafts/[id]`    |
 
 **Core Rule:** When a user generates a draft from a file, the system clones the template's structure into the draft's `draftSections` field. Any subsequent editing happens only on that draft copy. The master template is frozen for that invoice.
 
@@ -31,7 +31,6 @@ There are **two completely separate editing surfaces** that must never bleed int
 ### Step 1: Viewing a File
 
 The user opens the **File Details Modal** (project-details-modal). Inside this modal, in the right sidebar, there are two sections relevant to invoicing:
-
 1. **Financials** — shows total expenses, with an "Add Expense" and "Generate Invoice" button.
 2. **Invoices** — a dedicated section that lists all **finalized invoices** that have been generated for this specific file. Each invoice shows: document number, status, amount, date. This section is only visible to users with `invoice:view` permission.
 
@@ -104,14 +103,19 @@ When `isFormulaInjectable = true`, the numeric value of that field becomes avail
 
 ## 5. Permission Guard Summary
 
-| Action | Required Permission |
-|---|---|
-| View Invoices section in File Modal | `invoice:view` |
-| Generate Invoice (open modal) | `invoice:create` |
-| View Draft page | `invoice:view` |
-| Edit Draft (enter edit mode) | `invoice:edit` |
-| Finalize Invoice | `invoice:finalize` |
-| Delete Draft | `invoice:create` (own draft only) |
+| Action                              | Required Permission            |
+| ----------------------------------- | ------------------------------ |
+| View Invoices section in File Modal | `invoice:view`                 |
+| Generate Invoice (open modal)       | `invoice:create_draft`         |
+| View Draft page                     | `invoice:view`                 |
+| Fill manual values                  | `invoice:fill_values`          |
+| Edit line labels                    | `invoice:edit_line_labels`     |
+| Manage optional services            | `invoice:manage_optional_rows` |
+| Author formulas in draft builder    | `invoice:author_formulas`      |
+| Finalize Invoice                    | `invoice:finalize`             |
+| Revert Invoice to Draft             | `invoice:revert`               |
+| Void Invoice                        | `invoice:void`                 |
+| Delete Draft                        | `invoice:delete`               |
 
 ---
 

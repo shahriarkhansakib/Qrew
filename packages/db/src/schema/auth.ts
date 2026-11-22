@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 import { relations } from "drizzle-orm";
 import { boolean, index, integer, pgEnum, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
@@ -140,6 +140,8 @@ export const twoFactor = pgTable(
     secret: text("secret").notNull(),
     backupCodes: text("backup_codes").notNull(),
     verified: boolean("verified").notNull().default(false),
+    failedVerificationCount: integer("failed_verification_count").default(0),
+    lockedUntil: timestamp("locked_until", { mode: "date" }),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -212,6 +214,7 @@ export const invitations = pgTable("invitations", {
   role: text("role"),
   status: text("status").notNull(),
   expiresAt: timestamp("expiresAt", { mode: "date" }).notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
   inviterId: text("inviterId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -257,14 +260,11 @@ export const auditLogs = pgTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => randomUUID()),
-    adminId: text("admin_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    targetUserId: text("target_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    adminId: text("admin_id").references(() => users.id, { onDelete: "set null" }),
+    targetUserId: text("target_user_id").references(() => users.id, { onDelete: "set null" }),
     action: text("action").notNull(),
     reason: text("reason").notNull(),
+    metadata: text("metadata"),
     ipAddress: text("ip_address").notNull().default("unknown"),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },

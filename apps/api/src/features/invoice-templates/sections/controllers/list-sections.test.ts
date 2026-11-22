@@ -17,7 +17,7 @@ const { makeChain } = vi.hoisted(() => {
 });
 
 // ─── Mock @starter/db BEFORE importing the controller ────────────────────────
-const { makeSelectChain } = vi.hoisted(() => {
+const { makeSelectChain: _makeSelectChain } = vi.hoisted(() => {
   return {
     makeSelectChain: (result = [{ id: "id" }]) => {
       const p = Promise.resolve(result) as any;
@@ -82,6 +82,21 @@ vi.mock("@starter/db", () => {
     encodeFormula: vi.fn((f) => f),
     templateConstants: { id: "id", templateId: "templateId", token: "token" },
     decodeFormula: vi.fn((f) => f),
+    tokens: {
+      id: "id",
+      tokenKey: "tokenKey",
+      label: "label",
+      description: "description",
+      sortOrder: "sortOrder",
+      valueType: "valueType",
+      domain: "domain",
+      entityType: "entityType",
+      isSystem: "isSystem",
+      isInjectable: "isInjectable",
+      isVisible: "isVisible",
+      organizationId: "organizationId",
+      templateId: "templateId",
+    },
   };
 });
 

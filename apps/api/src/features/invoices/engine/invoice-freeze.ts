@@ -7,14 +7,19 @@ import {
   templateConstants,
   templateRows,
   templateSections,
+  tokens,
 } from "@starter/db";
 import { and, eq } from "drizzle-orm";
+import { all, create, type MathJsInstance } from "mathjs";
 import { AstEvaluatorService } from "./ast-evaluator.service";
 import { DagValidatorService } from "./dag-validator.service";
 import { generateDocumentNumber } from "./document-number";
-import { resolveScope } from "./token-resolver.service";
+import { parseToBN, resolveScope } from "./token-resolver.service";
+
+const math: MathJsInstance = create(all, { number: "BigNumber", precision: 20 });
 
 interface FreezeParams {
+  draftId?: string;
   organizationId: string;
   projectId: string;
   clientId: string;
@@ -25,6 +30,8 @@ interface FreezeParams {
   issuedToClientName: string;
   currency?: string;
   notes?: string;
+  periodStart?: string | Date | null;
+  periodEnd?: string | Date | null;
 }
 
 /**
@@ -39,13 +46,11 @@ export async function freezeInvoice(params: FreezeParams) {
     // ─────────────────────────────────────────────────────────────────────
     // STEP 1: Load draft sections from invoice_drafts DB table
     // ─────────────────────────────────────────────────────────────────────
-    const [draft] = await tx
-      .select()
-      .from(invoiceDrafts)
-      .where(
-        and(eq(invoiceDrafts.projectId, params.projectId), eq(invoiceDrafts.userId, params.userId)),
-      )
-      .limit(1);
+    const draftCondition = params.draftId
+      ? eq(invoiceDrafts.id, params.draftId)
+      : and(eq(invoiceDrafts.projectId, params.projectId), eq(invoiceDrafts.userId, params.userId));
+
+    const [draft] = await tx.select().from(invoiceDrafts).where(draftCondition).limit(1);
 
     const draftSections: any[] = draft?.draftSections ?? [];
 
@@ -59,6 +64,8 @@ export async function freezeInvoice(params: FreezeParams) {
       templateId: params.sourceTemplateId ?? "",
       db: tx,
       headerFieldValues,
+      periodStart: params.periodStart,
+      periodEnd: params.periodEnd,
     });
 
     // Build lookup maps for formula decoding from draft and template
@@ -90,24 +97,27 @@ export async function freezeInvoice(params: FreezeParams) {
     // 3. Fallback / supplementary source: master template definitions
     if (params.sourceTemplateId) {
       const rows = await tx
-        .select({ id: templateRows.id, rowToken: templateRows.rowToken })
+        .select({ id: templateRows.id, rowToken: tokens.tokenKey })
         .from(templateRows)
+        .innerJoin(tokens, eq(tokens.id, templateRows.id))
         .where(eq(templateRows.templateId, params.sourceTemplateId));
       for (const r of rows) {
         if (!idToToken[r.id]) idToToken[r.id] = r.rowToken;
       }
 
       const secs = await tx
-        .select({ id: templateSections.id, sectionToken: templateSections.sectionToken })
+        .select({ id: templateSections.id, sectionToken: tokens.tokenKey })
         .from(templateSections)
+        .innerJoin(tokens, eq(tokens.id, templateSections.id))
         .where(eq(templateSections.templateId, params.sourceTemplateId));
       for (const s of secs) {
         if (!secIdToToken[s.id]) secIdToToken[s.id] = `SEC_${s.sectionToken}`;
       }
 
       const consts = await tx
-        .select({ id: templateConstants.id, token: templateConstants.token })
+        .select({ id: templateConstants.id, token: tokens.tokenKey })
         .from(templateConstants)
+        .innerJoin(tokens, eq(tokens.id, templateConstants.id))
         .where(eq(templateConstants.templateId, params.sourceTemplateId));
       for (const c of consts) {
         if (!tplIdToToken[c.id]) tplIdToToken[c.id] = c.token;
@@ -144,19 +154,17 @@ export async function freezeInvoice(params: FreezeParams) {
       );
     }
 
-    let totalBase = 0;
-    let totalCharges = 0;
+    let totalBase = parseToBN(0);
     for (const section of evalResult.evaluatedSections) {
-      totalBase += parseFloat(section.sectionBase ?? "0");
-      totalCharges += parseFloat(section.sectionChargesTotal ?? "0");
-      for (const r of section.rows ?? []) {
-        totalCharges += parseFloat(r.chargesValue ?? "0");
-      }
+      totalBase = math.add(totalBase, parseToBN(section.sectionBase ?? "0")) as any;
     }
 
-    const grandTotal = (totalBase + totalCharges).toFixed(6);
+    const grandTotalBN = parseToBN(evalResult.grandTotal ?? "0");
+    const totalChargesBN = math.subtract(grandTotalBN, totalBase) as any;
+
+    const grandTotal = grandTotalBN.toFixed(6);
     const totalBaseStr = totalBase.toFixed(6);
-    const totalChargesStr = totalCharges.toFixed(6);
+    const totalChargesStr = totalChargesBN.toFixed(6);
 
     // ─────────────────────────────────────────────────────────────────────
     // STEP 4: Insert invoice placeholder (status='draft')
@@ -325,11 +333,18 @@ export async function freezeInvoice(params: FreezeParams) {
     // ─────────────────────────────────────────────────────────────────────
     // STEP 9: Delete the draft
     // ─────────────────────────────────────────────────────────────────────
-    await tx
-      .delete(invoiceDrafts)
-      .where(
-        and(eq(invoiceDrafts.projectId, params.projectId), eq(invoiceDrafts.userId, params.userId)),
-      );
+    if (draft?.id) {
+      await tx.delete(invoiceDrafts).where(eq(invoiceDrafts.id, draft.id));
+    } else {
+      await tx
+        .delete(invoiceDrafts)
+        .where(
+          and(
+            eq(invoiceDrafts.projectId, params.projectId),
+            eq(invoiceDrafts.userId, params.userId),
+          ),
+        );
+    }
 
     return frozen;
   });

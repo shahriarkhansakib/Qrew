@@ -9,11 +9,10 @@
  */
 
 import { relations } from "drizzle-orm";
-import { boolean, decimal, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { decimal, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { organizations, users } from "./auth";
 import { customers } from "./customers";
 import { documentStatusEnum, stockStateEnum } from "./inventory-enums";
-import { inventoryTransactions } from "./inventory-transactions";
 import { products } from "./products";
 import { warehouses } from "./warehouses";
 
@@ -116,7 +115,6 @@ export const salesRelations = relations(sales, ({ one, many }) => ({
     references: [users.id],
   }),
   items: many(saleItems),
-  transactions: many(inventoryTransactions),
 }));
 
 export const saleItemsRelations = relations(saleItems, ({ one }) => ({

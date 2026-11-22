@@ -25,18 +25,21 @@ import {
   type SecIdToTokenMap,
   type TplIdToTokenMap,
 } from "@starter/db";
-import {
-  type DagValidationResult,
-  type EngineError,
-  type EvaluatorRow,
-  type EvaluatorRowCharge,
-  type EvaluatorSection,
-  type EvaluatorSectionCharge,
-} from "./types";
+import { type DagValidationResult, type EngineError, type EvaluatorSection } from "./types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOKEN EXTRACTION
 // ─────────────────────────────────────────────────────────────────────────────
+
+export const MATH_FUNCTION_NAMES = new Set([
+  "MIN",
+  "MAX",
+  "ROUND",
+  "CLAMP",
+  "ABS",
+  "FLOOR",
+  "CEIL",
+]);
 
 /**
  * Extracts all bare token identifiers from a formula string.
@@ -46,7 +49,8 @@ import {
 function extractTokens(formula: string): string[] {
   // Match word-char sequences that are NOT pure numbers
   const matches = formula.match(/\b[A-Z_][A-Z0-9_]*\b/g);
-  return matches ? [...new Set(matches)] : [];
+  if (!matches) return [];
+  return [...new Set(matches.filter((t) => !MATH_FUNCTION_NAMES.has(t)))];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,7 +222,7 @@ export class DagValidatorService {
             );
             const refs = extractTokens(decodedFormula);
             const isExternalToken = (ref: string) =>
-              externalTokens.has(ref) || /^(GBL_|FILE_|TPL_|EXP_|CAT_)/.test(ref);
+              externalTokens.has(ref) || /^(GBL_|FILE_|TPL_|EXP_)/.test(ref);
 
             for (const ref of refs) {
               addEdge(ref, charge.chargeToken);
@@ -251,7 +255,7 @@ export class DagValidatorService {
         );
         const refs = extractTokens(decodedFormula);
         const isExternalToken = (ref: string) =>
-          externalTokens.has(ref) || /^(GBL_|FILE_|TPL_|EXP_|CAT_)/.test(ref);
+          externalTokens.has(ref) || /^(GBL_|FILE_|TPL_|EXP_)/.test(ref);
 
         for (const ref of refs) {
           addEdge(ref, sc.chargeToken);

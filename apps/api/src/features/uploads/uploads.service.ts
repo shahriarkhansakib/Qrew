@@ -1,9 +1,9 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { s3Client } from "../../infra/lib/storage";
+import { getS3Client } from "../../infra/lib/storage";
 
 export const UploadsService = {
-  async generatePresignedPut(userId: string, contentType: string) {
+  async generatePresignedPut(userId: string, _contentType: string) {
     const bucket = process.env.R2_BUCKET_NAME!;
 
     const key = `avatars/${userId}.webp`;
@@ -14,7 +14,7 @@ export const UploadsService = {
       ContentType: "image/webp",
     });
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 60 });
+    const url = await getSignedUrl(getS3Client(), command, { expiresIn: 60 });
     const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
 
     return { url, publicUrl };
@@ -35,7 +35,7 @@ export const UploadsService = {
       ContentType: contentType,
     });
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+    const url = await getSignedUrl(getS3Client(), command, { expiresIn: 300 });
     const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
 
     return { url, publicUrl };
@@ -51,6 +51,6 @@ export const UploadsService = {
       Key: key,
     });
 
-    return s3Client.send(command);
+    return getS3Client().send(command);
   },
 };

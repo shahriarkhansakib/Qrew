@@ -2,21 +2,21 @@ import { apiUrl } from "@/lib/constants";
 
 export const invoiceApi = {
   // --- Org Configs ---
-  getOrgConfigs: async (orgId: string) => {
+  getOrgConfigs: async (_orgId: string) => {
     const res = await fetch(`${apiUrl}/api/org-configs`, { credentials: "include" });
     if (!res.ok) throw new Error("Failed to fetch org configs");
     return res.json();
   },
 
   // --- PDF Layouts ---
-  getPdfLayout: async (orgId: string) => {
+  getPdfLayout: async (_orgId: string) => {
     const res = await fetch(`${apiUrl}/api/invoice-pdf-layouts`, { credentials: "include" });
     if (!res.ok) throw new Error("Failed to fetch PDF layout");
     return res.json();
   },
 
   // --- Templates ---
-  getTemplates: async (orgId: string, scope?: string) => {
+  getTemplates: async (_orgId: string, scope?: string) => {
     const url = new URL(`${apiUrl}/api/invoice-templates`);
     if (scope) url.searchParams.append("scope", scope);
     const res = await fetch(url.toString(), { credentials: "include" });
@@ -103,6 +103,166 @@ export const invoiceApi = {
   getInvoiceDetail: async (id: string) => {
     const res = await fetch(`${apiUrl}/api/invoices/${id}`, { credentials: "include" });
     if (!res.ok) throw new Error("Failed to fetch invoice detail");
+    return res.json();
+  },
+
+  // --- Optional Service Rows ---
+  getDraftOptionalRows: async (draftId: string) => {
+    const res = await fetch(`${apiUrl}/api/invoices/drafts/${draftId}/optional-rows`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Failed to fetch draft optional rows");
+    return res.json();
+  },
+
+  addDraftOptionalRow: async (
+    draftId: string,
+    payload: {
+      canonicalToken: string;
+      sectionId?: string;
+      customLabel?: string;
+      customValue?: number;
+      customFormula?: string;
+    },
+  ) => {
+    const res = await fetch(`${apiUrl}/api/invoices/drafts/${draftId}/optional-rows`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to add optional service row");
+    }
+    return res.json();
+  },
+
+  deleteDraftOptionalRow: async (draftId: string, rowId: string) => {
+    const res = await fetch(`${apiUrl}/api/invoices/drafts/${draftId}/optional-rows/${rowId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to delete optional service row");
+    }
+    return res.json();
+  },
+
+  getTemplateOptionalRows: async (templateId: string) => {
+    const res = await fetch(`${apiUrl}/api/invoice-templates/${templateId}/optional-rows`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Failed to fetch template optional rows");
+    return res.json();
+  },
+
+  addTemplateOptionalRow: async (templateId: string, payload: any) => {
+    const res = await fetch(`${apiUrl}/api/invoice-templates/${templateId}/optional-rows`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to add template optional row");
+    }
+    return res.json();
+  },
+
+  updateTemplateOptionalRow: async (templateId: string, idOrToken: string, payload: any) => {
+    const res = await fetch(
+      `${apiUrl}/api/invoice-templates/${templateId}/optional-rows/${idOrToken}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to update template optional row");
+    }
+    return res.json();
+  },
+
+  deleteTemplateOptionalRow: async (templateId: string, canonicalToken: string) => {
+    const res = await fetch(
+      `${apiUrl}/api/invoice-templates/${templateId}/optional-rows/${canonicalToken}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to delete template optional row");
+    }
+    return res.json();
+  },
+
+  getDraftTemplateSyncStatus: async (draftId: string) => {
+    const res = await fetch(`${apiUrl}/api/invoices/drafts/${draftId}/template-sync-status`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Failed to fetch template sync status");
+    return res.json();
+  },
+
+  syncDraftWithTemplate: async (draftId: string) => {
+    const res = await fetch(`${apiUrl}/api/invoices/drafts/${draftId}/sync-template`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || err.message || "Failed to sync draft with template");
+    }
+    return res.json();
+  },
+
+  resetDraftToInitial: async (draftId: string) => {
+    const res = await fetch(`${apiUrl}/api/invoices/drafts/${draftId}/reset-initial`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        err.error || err.message || "Failed to reset draft to initial template state",
+      );
+    }
+    return res.json();
+  },
+
+  updateDraftHeaderValues: async (draftId: string, values: Record<string, any>) => {
+    const res = await fetch(`${apiUrl}/api/invoices/drafts/${draftId}/header-values`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ values }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || err.message || "Failed to update file header values");
+    }
+    return res.json();
+  },
+
+  updateTemplateColumns: async (templateId: string, columnDefinitions: any[]) => {
+    const res = await fetch(`${apiUrl}/api/invoice-templates/${templateId}/columns`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ columnDefinitions }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || err.message || "Failed to update columns");
+    }
     return res.json();
   },
 };

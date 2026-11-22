@@ -3,15 +3,18 @@ import {
   decodeFormula,
   encodeFormula,
   invoiceTemplates,
-  templateRowCharges,
   templateRows,
   templateSections,
+  tokens,
 } from "@starter/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { Context } from "hono";
 import { z } from "zod";
+import { TokenService } from "../../../tokens/token.service";
+import { touchTemplate } from "../../invoice-templates.controller";
 import { buildConstantIndex } from "../../metadata/services/constant-index.service";
 import { buildSectionIndex } from "../../sections/services/section-index.service";
+import { resequenceTemplateRowTokens } from "../services/resequence-rows.service";
 import { buildRowIndex, toSnakeCase } from "../services/row-index.service";
 
 const rowChargeSchema = z.object({
@@ -33,9 +36,14 @@ const createRowSchema = z.object({
     .regex(
       /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/,
       "rowToken must be UPPER_SNAKE_CASE with no leading, trailing, or consecutive underscores",
-    ),
+    )
+    .optional(),
+  cellValues: z.record(z.string(), z.any()).optional().default({}),
   description: z.string().optional().nullable(),
   orderIndex: z.number().int().min(0).default(0),
+  valueType: z.enum(["normal", "formula"]).optional().default("normal"),
+  formula: z.string().optional().nullable(),
+  initialValue: z.union([z.string(), z.number()]).optional().nullable(),
   charges: z.array(rowChargeSchema).optional().default([]),
 });
 
@@ -64,14 +72,45 @@ export async function createRow(c: Context) {
   const parsed = createRowSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: parsed.error }, 400);
 
-  const { rowToken, label, description, orderIndex, charges } = parsed.data;
+  const {
+    rowToken,
+    label,
+    description,
+    orderIndex: _orderIndex,
+    valueType,
+    formula,
+    initialValue,
+    charges,
+    cellValues,
+  } = parsed.data;
+
+  let effectiveRowToken = rowToken;
+  if (!effectiveRowToken) {
+    const templateRowCounts = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(templateRows)
+      .where(eq(templateRows.templateId, templateId));
+    let nextSerial = Number(templateRowCounts[0]?.count ?? 0) + 1;
+    effectiveRowToken = `ROW_${nextSerial}`;
+    while (
+      await db.query.tokens?.findFirst({
+        where: and(eq(tokens.templateId, templateId), eq(tokens.tokenKey, effectiveRowToken)),
+      })
+    ) {
+      nextSerial++;
+      effectiveRowToken = `ROW_${nextSerial}`;
+    }
+  }
 
   // Token uniqueness check
-  const existingRow = await db.query.templateRows.findFirst({
-    where: and(eq(templateRows.templateId, templateId), eq(templateRows.rowToken, rowToken)),
+  const existingToken = await db.query.tokens?.findFirst({
+    where: and(eq(tokens.templateId, templateId), eq(tokens.tokenKey, effectiveRowToken)),
   });
-  if (existingRow) {
-    return c.json({ error: `rowToken "${rowToken}" is already used in this template.` }, 409);
+  if (existingToken) {
+    return c.json(
+      { error: `rowToken "${effectiveRowToken}" is already used in this template.` },
+      409,
+    );
   }
 
   // Create tokenToId map for encoding the formula
@@ -80,59 +119,76 @@ export async function createRow(c: Context) {
   const { tplTokenToId, tplIdToToken } = await buildConstantIndex(templateId);
 
   // Assign sortOrder = max existing sortOrder + 1 so new rows always go to the bottom.
-  const existingSortOrders = await db
-    .select({ sortOrder: templateRows.sortOrder })
+  const existingRows = await db
+    .select({ sortOrder: tokens.sortOrder })
     .from(templateRows)
+    .innerJoin(tokens, eq(tokens.id, templateRows.id))
     .where(eq(templateRows.sectionId, sectionId));
-  const maxSortOrder = existingSortOrders.reduce((max, r) => Math.max(max, r.sortOrder ?? 0), -1);
+  const maxSortOrder = existingRows.reduce((max, r) => Math.max(max, r.sortOrder ?? 0), -1);
   const newSortOrder = maxSortOrder + 1;
 
   const result = await db.transaction(async (tx) => {
     const rowId = crypto.randomUUID();
 
     // Add new row to token map so charges can reference it
-    tokenToId[rowToken] = rowId;
-    idToToken[rowId] = rowToken;
+    tokenToId[effectiveRowToken] = rowId;
+    idToToken[rowId] = effectiveRowToken;
 
-    const [row] = await tx
-      .insert(templateRows)
-      .values({
+    const encodedRowFormula = formula
+      ? (encodeFormula(formula, tokenToId, secTokenToId, tplTokenToId) ?? formula)
+      : null;
+
+    const row = await TokenService.createRowToken(
+      {
         id: rowId,
         templateId,
         sectionId,
+        rowToken: effectiveRowToken,
         label,
-        rowToken,
         description: description ?? null,
-        valueType: "normal",
-        formula: null,
-        initialValue: null,
+        valueType: valueType ?? "normal",
+        formula: encodedRowFormula,
+        initialValue: initialValue != null ? String(initialValue) : null,
+        cellValues: cellValues ?? {},
+        organizationId,
         sortOrder: newSortOrder,
-      })
-      .returning();
+      },
+      tx,
+    );
 
     // Insert row charges
     const insertedCharges = await Promise.all(
-      (charges ?? []).map((charge, i) =>
-        tx
-          .insert(templateRowCharges)
-          .values({
-            id: crypto.randomUUID(),
+      (charges ?? []).map(async (charge, i) => {
+        const chargeToken =
+          charge.chargeToken ?? `${effectiveRowToken}_${toSnakeCase(charge.label)}`;
+        const chargeId = crypto.randomUUID();
+        tokenToId[chargeToken] = chargeId;
+        idToToken[chargeId] = chargeToken;
+
+        const encodedFormula =
+          encodeFormula(charge.formula, tokenToId, secTokenToId, tplTokenToId) ?? charge.formula;
+
+        return TokenService.createRowChargeToken(
+          {
+            id: chargeId,
             rowId: row.id,
+            chargeToken,
             label: charge.label,
             subDescription: charge.subDescription ?? null,
             qualifier: charge.qualifier ?? null,
             tags: charge.tags ?? [],
-            // Use explicit chargeToken if provided; fall back to label-derived token.
-            chargeToken: charge.chargeToken ?? `${rowToken}_${toSnakeCase(charge.label)}`,
-            formula:
-              encodeFormula(charge.formula, tokenToId, secTokenToId, tplTokenToId) ??
-              charge.formula,
+            formula: encodedFormula,
+            templateId,
+            organizationId,
             sortOrder: charge.sortOrder ?? i,
-          })
-          .returning()
-          .then((r) => r[0]),
-      ),
+          },
+          tx,
+        );
+      }),
     );
+
+    await touchTemplate(templateId, tx);
+    await resequenceTemplateRowTokens(templateId, tx);
 
     return {
       ...row,

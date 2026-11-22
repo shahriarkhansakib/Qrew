@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   AnyPgColumn,
   boolean,
@@ -12,13 +12,41 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import { organizations, users } from "./auth";
-import {
-  componentValueTypeEnum,
-  documentTypeEnum,
-  headerFieldTypeEnum,
-  sectionChargeBaseEnum,
-  templateScopeEnum,
-} from "./invoice-enums";
+import { customFieldDefinitions } from "./custom_fields";
+import { componentValueTypeEnum, headerFieldTypeEnum, templateScopeEnum } from "./invoice-enums";
+import { tokens } from "./tokens";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PREBUILT OPTIONAL SERVICE ROW CONTRACT
+// ─────────────────────────────────────────────────────────────────────────────
+export interface TemplateOptionalRow {
+  id: string; // UUID
+  rowToken: string; // Canonical token name (e.g., "CRANE_RENTAL")
+  label: string; // Default display label (e.g., "Mobile Crane Rental")
+  subDescription?: string | null;
+  valueType: "normal" | "formula";
+  formula?: string | null;
+  initialValue?: string | null;
+  suggestedSectionToken?: string | null;
+  cellValues?: Record<string, any> | null;
+}
+
+export type TemplateType = "standard" | "general" | "sheet";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CUSTOMIZABLE SHEET TEMPLATE COLUMN DEFINITION
+// ─────────────────────────────────────────────────────────────────────────────
+export interface TemplateColumnDefinition {
+  id: string; // Column UUID
+  key: string; // Unique key within template (e.g. "col_date", "col_desc", "col_amount")
+  label: string; // Displayed header heading (e.g. "Date", "Description", "Cost")
+  dataType: "serial" | "date" | "text" | "number" | "select";
+  width?: string; // CSS width class or styling width (e.g. "w-16", "w-36", "flex-1")
+  align?: "left" | "center" | "right";
+  options?: string[]; // Allowed dropdown options if dataType === "select"
+  isTotaled?: boolean; // For "number" dataType: auto-sum in section footer & grand total
+  defaultValue?: any;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INVOICE TEMPLATES
@@ -35,6 +63,11 @@ export const invoiceTemplates = pgTable(
     documentPrefix: text("document_prefix").default("INV").notNull(),
     numberingFormat: text("numbering_format").default("{PREFIX}-{YYYY}-{SEQ:4}").notNull(),
     scope: templateScopeEnum("scope").default("organization").notNull(),
+    templateType: text("template_type").default("standard").notNull(),
+    columnDefinitions: jsonb("column_definitions")
+      .$type<TemplateColumnDefinition[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     currency: text("currency").default("USD").notNull(),
     version: integer("version").default(1).notNull(),
     isArchived: boolean("is_archived").default(false).notNull(),
@@ -45,6 +78,10 @@ export const invoiceTemplates = pgTable(
       (): AnyPgColumn => invoiceTemplates.id,
       { onDelete: "set null" },
     ),
+    optionalRows: jsonb("optional_rows")
+      .$type<TemplateOptionalRow[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" })
       .defaultNow()
@@ -64,171 +101,133 @@ export const invoiceTemplates = pgTable(
 export const templateSections = pgTable(
   "template_sections",
   {
-    id: text("id").primaryKey(),
+    id: text("id")
+      .primaryKey()
+      .references((): AnyPgColumn => tokens.id, { onDelete: "cascade" }),
     templateId: text("template_id")
       .notNull()
       .references(() => invoiceTemplates.id, { onDelete: "cascade" }),
-    /** Optional custom name. If null, the UI auto-displays the letter (A, B, C…). */
-    label: text("label"),
-    /** Optional description / notes shown below the section name. */
-    description: text("description"),
-    /** Frozen after creation. Drives SEC_<TOKEN>_BASE / _TOTAL / _CHARGES tokens. */
-    sectionToken: text("section_token").notNull(),
-    sortOrder: integer("sort_order").default(0).notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" })
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (t) => [
-    unique("template_section_token_unique").on(t.templateId, t.sectionToken),
-    index("template_sections_template_sort_idx").on(t.templateId, t.sortOrder),
-  ],
+  (t) => [index("template_sections_template_idx").on(t.templateId)],
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMPLATE ROWS
-//
-// Token contract:
-//   rowToken            → the BASE sum (no charges)
-//   rowToken + "_TOTAL" → base + sum of row charges  (derived at eval time)
 // ─────────────────────────────────────────────────────────────────────────────
 export const templateRows = pgTable(
   "template_rows",
   {
-    id: text("id").primaryKey(),
+    id: text("id")
+      .primaryKey()
+      .references((): AnyPgColumn => tokens.id, { onDelete: "cascade" }),
     templateId: text("template_id")
       .notNull()
       .references(() => invoiceTemplates.id, { onDelete: "cascade" }),
     sectionId: text("section_id")
       .notNull()
       .references(() => templateSections.id, { onDelete: "cascade" }),
-    /** Label shown in the section card as the group heading (e.g. "PORT DUES & FEES"). */
-    label: text("label").notNull(),
-    /**
-     * Globally unique per template. Short form — no section prefix.
-     * e.g. PORT_DUES, AGENCY_FEE
-     * Drives tokens: PORT_DUES (base sum) and PORT_DUES_TOTAL (base + charges)
-     */
-    rowToken: text("row_token").notNull(),
-    sortOrder: integer("sort_order").default(0).notNull(),
-    /** Optional description shown in the label column beneath the row label. */
-    description: text("description"),
     /** normal = manual entry / formula = engine-computed */
     valueType: componentValueTypeEnum("value_type").notNull().default("normal"),
     /**
-     * Bare expression using {{$row:UUID}} references.
+     * Bare expression using {{$tok:UUID}} references.
      * Decoded to token names before engine evaluation.
      * Only present when valueType = 'formula'.
      */
     formula: text("formula"),
     /** Pre-fill value for manual entry rows. Stored as numeric string. */
     initialValue: numeric("initial_value", { precision: 20, scale: 6 }),
+    cellValues: jsonb("cell_values")
+      .$type<Record<string, any>>()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" })
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (t) => [
-    unique("template_row_token_unique").on(t.templateId, t.rowToken),
-    index("template_rows_template_section_sort_idx").on(t.templateId, t.sectionId, t.sortOrder),
-  ],
+  (t) => [index("template_rows_template_section_idx").on(t.templateId, t.sectionId)],
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMPLATE ROW CHARGES
-// Computed additions bound to a parent row (e.g. VAT 15% on PORT_DUES).
-// formula: bare expression using the parent rowToken as base.
-//   e.g.  "PORT_DUES * 0.15"
-// chargeToken: <ROW_TOKEN>_<CHARGE_LABEL_SNAKECASE>
-//   e.g.  PORT_DUES_VAT_15
 // ─────────────────────────────────────────────────────────────────────────────
 export const templateRowCharges = pgTable(
   "template_row_charges",
   {
-    id: text("id").primaryKey(),
+    id: text("id")
+      .primaryKey()
+      .references((): AnyPgColumn => tokens.id, { onDelete: "cascade" }),
     rowId: text("row_id")
       .notNull()
       .references(() => templateRows.id, { onDelete: "cascade" }),
-    /** Display label for this charge (e.g. "MANDATORY 15% VAT"). */
-    label: text("label").notNull(),
-    subDescription: text("sub_description"),
     qualifier: text("qualifier"),
     tags: text("tags").array(),
-    /** Auto-generated: <ROW_TOKEN>_<LABEL_SNAKECASE>. Globally unique per template. */
-    chargeToken: text("charge_token").notNull(),
     /**
-     * Bare token expression. Must reference the parent rowToken as its primary operand.
-     * e.g. "PORT_DUES * 0.15"
+     * Bare token expression using {{$tok:UUID}}.
      */
     formula: text("formula").notNull(),
-    sortOrder: integer("sort_order").default(0).notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" })
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (t) => [
-    unique("template_row_charge_token_unique").on(t.rowId, t.chargeToken),
-    index("template_row_charges_row_sort_idx").on(t.rowId, t.sortOrder),
-  ],
+  (t) => [index("template_row_charges_row_idx").on(t.rowId)],
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMPLATE SECTION CHARGES
-// Computed additions bound to a section (e.g. 10% levy on all port costs).
 // ─────────────────────────────────────────────────────────────────────────────
 export const templateSectionCharges = pgTable(
   "template_section_charges",
   {
-    id: text("id").primaryKey(),
+    id: text("id")
+      .primaryKey()
+      .references((): AnyPgColumn => tokens.id, { onDelete: "cascade" }),
     sectionId: text("section_id")
       .notNull()
       .references(() => templateSections.id, { onDelete: "cascade" }),
     templateId: text("template_id")
       .notNull()
       .references(() => invoiceTemplates.id, { onDelete: "cascade" }),
-    label: text("label").notNull(),
-    subDescription: text("sub_description"),
     qualifier: text("qualifier"),
     tags: text("tags").array(),
-    /** Auto-generated: SEC_<SECTION_TOKEN>_<LABEL_SNAKECASE>. */
-    chargeToken: text("charge_token").notNull(),
     /** The mathematical formula expression for this charge. */
     formula: text("formula").notNull(),
-    sortOrder: integer("sort_order").default(0).notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" })
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (t) => [
-    unique("template_section_charge_token_unique").on(t.sectionId, t.chargeToken),
-    index("template_section_charges_section_sort_idx").on(t.sectionId, t.sortOrder),
-  ],
+  (t) => [index("template_section_charges_section_idx").on(t.sectionId)],
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMPLATE HEADER FIELDS
-// Fields shown above the table (vessel name, cargo, GRT, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
 export const templateHeaderFields = pgTable(
   "template_header_fields",
   {
-    id: text("id").primaryKey(),
+    id: text("id")
+      .primaryKey()
+      .references((): AnyPgColumn => tokens.id, { onDelete: "cascade" }),
     templateId: text("template_id")
       .notNull()
       .references(() => invoiceTemplates.id, { onDelete: "cascade" }),
     fieldType: headerFieldTypeEnum("field_type").notNull(),
-    label: text("label").notNull(),
-    sortOrder: integer("sort_order").default(0).notNull(),
     columnPosition: text("column_position").default("left").notNull(),
-    fileFieldKey: text("file_field_key"),
-    isFormulaInjectable: boolean("is_formula_injectable").default(false).notNull(),
+    customFieldDefinitionId: text("custom_field_definition_id").references(
+      (): AnyPgColumn => customFieldDefinitions.id,
+      { onDelete: "set null" },
+    ),
+    systemFieldKey: text("system_field_key"),
     orgConfigKey: text("org_config_key"),
     defaultManualValue: text("default_manual_value"),
     placeholder: text("placeholder"),
@@ -238,7 +237,7 @@ export const templateHeaderFields = pgTable(
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (t) => [index("template_header_fields_template_sort_idx").on(t.templateId, t.sortOrder)],
+  (t) => [index("template_header_fields_template_idx").on(t.templateId)],
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -291,6 +290,10 @@ export const invoiceTemplatesRelations = relations(invoiceTemplates, ({ one, man
 }));
 
 export const templateRowsRelations = relations(templateRows, ({ one, many }) => ({
+  token: one(tokens, {
+    fields: [templateRows.id],
+    references: [tokens.id],
+  }),
   template: one(invoiceTemplates, {
     fields: [templateRows.templateId],
     references: [invoiceTemplates.id],
@@ -303,6 +306,10 @@ export const templateRowsRelations = relations(templateRows, ({ one, many }) => 
 }));
 
 export const templateRowChargesRelations = relations(templateRowCharges, ({ one }) => ({
+  token: one(tokens, {
+    fields: [templateRowCharges.id],
+    references: [tokens.id],
+  }),
   row: one(templateRows, {
     fields: [templateRowCharges.rowId],
     references: [templateRows.id],
@@ -310,6 +317,10 @@ export const templateRowChargesRelations = relations(templateRowCharges, ({ one 
 }));
 
 export const templateSectionsRelations = relations(templateSections, ({ one, many }) => ({
+  token: one(tokens, {
+    fields: [templateSections.id],
+    references: [tokens.id],
+  }),
   template: one(invoiceTemplates, {
     fields: [templateSections.templateId],
     references: [invoiceTemplates.id],
@@ -319,6 +330,10 @@ export const templateSectionsRelations = relations(templateSections, ({ one, man
 }));
 
 export const templateSectionChargesRelations = relations(templateSectionCharges, ({ one }) => ({
+  token: one(tokens, {
+    fields: [templateSectionCharges.id],
+    references: [tokens.id],
+  }),
   section: one(templateSections, {
     fields: [templateSectionCharges.sectionId],
     references: [templateSections.id],
@@ -329,13 +344,18 @@ export const templateSectionChargesRelations = relations(templateSectionCharges,
   }),
 }));
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPORTED TYPES
-// ─────────────────────────────────────────────────────────────────────────────
 export const templateHeaderFieldsRelations = relations(templateHeaderFields, ({ one }) => ({
+  token: one(tokens, {
+    fields: [templateHeaderFields.id],
+    references: [tokens.id],
+  }),
   template: one(invoiceTemplates, {
     fields: [templateHeaderFields.templateId],
     references: [invoiceTemplates.id],
+  }),
+  customFieldDefinition: one(customFieldDefinitions, {
+    fields: [templateHeaderFields.customFieldDefinitionId],
+    references: [customFieldDefinitions.id],
   }),
 }));
 export type InvoiceTemplate = typeof invoiceTemplates.$inferSelect;

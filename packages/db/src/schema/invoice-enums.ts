@@ -38,7 +38,13 @@ export const invoiceStatusEnum = pgEnum("invoice_status_enum", [
 ]);
 
 // ── Invoice document type ─────────────────────────────────────────────────────
-export const documentTypeEnum = pgEnum("document_type_enum", ["pda", "fda", "proforma", "general"]);
+export const documentTypeEnum = pgEnum("document_type_enum", [
+  "general",
+  "standard",
+  "retainer",
+  "proforma",
+  "credit_note",
+]);
 
 // ── Org config value type ─────────────────────────────────────────────────────
 export const configValueTypeEnum = pgEnum("config_value_type_enum", [
@@ -46,4 +52,16 @@ export const configValueTypeEnum = pgEnum("config_value_type_enum", [
   "percentage",
   "currency_rate",
   "text",
+]);
+
+// ── Token Domain ──────────────────────────────────────────────────────────────
+export const tokenDomainEnum = pgEnum("token_domain", [
+  "row",
+  "row_charge",
+  "section",
+  "section_charge",
+  "template_constant",
+  "file_field",
+  "global_constant",
+  "expense_category",
 ]);
