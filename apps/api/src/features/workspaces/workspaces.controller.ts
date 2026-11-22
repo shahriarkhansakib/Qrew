@@ -13,13 +13,14 @@ export class WorkspacesController {
       if (!sessionData?.session) return c.json({ error: "Unauthorized" }, 401);
 
       const body = await c.req.json();
-      const { name } = body;
-      if (!name) return c.json({ error: "Organization name is required" }, 400);
+      const rawName = typeof body?.name === "string" ? body.name.trim() : "";
+      if (!rawName) return c.json({ error: "Organization name is required" }, 400);
 
-      const slug = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)+/g, "");
+      const baseSlug =
+        rawName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)+/g, "") || "workspace";
       const orgId = uuidv4();
       const memberId = uuidv4();
       const userId = sessionData.user.id;
@@ -40,10 +41,17 @@ export class WorkspacesController {
       }
 
       await db.transaction(async (tx) => {
+        const existingOrgWithSlug = await tx
+          .select({ id: schema.organizations.id })
+          .from(schema.organizations)
+          .where(eq(schema.organizations.slug, baseSlug))
+          .limit(1);
+        const slug = existingOrgWithSlug.length > 0 ? `${baseSlug}-${orgId.slice(0, 8)}` : baseSlug;
+
         // 1. Create Organization
         await tx.insert(schema.organizations).values({
           id: orgId,
-          name,
+          name: rawName,
           slug,
           createdAt: new Date(),
         });
