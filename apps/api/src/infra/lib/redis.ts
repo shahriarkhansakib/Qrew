@@ -26,6 +26,7 @@ const prodRedis = hasUpstash
   ? new UpstashRedis({
       url: upstashUrl!,
       token: upstashToken!,
+      automaticDeserialization: false,
     })
   : null;
 
@@ -119,6 +120,15 @@ export const redis = {
       return 1;
     } catch {
       return 1;
+    }
+  },
+  ttl: async (key: string): Promise<number> => {
+    try {
+      if (hasUpstash) return await prodRedis!.ttl(key);
+      if (hasIoredis) return await localRedis!.ttl(key);
+      return -2;
+    } catch {
+      return -2;
     }
   },
   smembers: async (key: string): Promise<string[]> => {
