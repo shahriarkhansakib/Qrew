@@ -5,6 +5,7 @@ import {
   expenseCategories,
   orgRolePermissions,
   orgRoles,
+  permissions,
   projectStatuses,
   projectStatusTransitions,
   tokens,
@@ -307,6 +308,21 @@ export async function seedOrganizationDefaults(db: any, orgId: string, userId: s
       staffPerms.forEach((key) =>
         permissionsToInsert.push({ roleId: staffRole.id, permissionKey: key }),
       );
+
+    // Ensure global permissions catalog is populated before binding role permissions
+    // (prevents FK 23503 errors if newly added permissions haven't been seeded manually yet)
+    if (PERMISSIONS_CATALOG.length > 0) {
+      await db
+        .insert(permissions)
+        .values(
+          PERMISSIONS_CATALOG.map((p) => ({
+            key: p.key,
+            category: p.category,
+            description: p.description,
+          })),
+        )
+        .onConflictDoNothing();
+    }
 
     if (permissionsToInsert.length > 0) {
       await db.insert(orgRolePermissions).values(permissionsToInsert);
