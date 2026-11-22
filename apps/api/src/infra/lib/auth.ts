@@ -6,6 +6,7 @@ import { admin, emailOTP, magicLink, organization, twoFactor } from "better-auth
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import { buildAuthOriginConfig, resolveAppOrigin } from "./auth-origin";
+import { createSecondaryStorage } from "./auth-secondary-storage";
 import { logger } from "./logger";
 import { redis } from "./redis";
 
@@ -72,6 +73,9 @@ export const auth = betterAuth({
   },
   advanced: {
     trustedProxyHeaders: true,
+    ipAddress: {
+      ipAddressHeaders: ["x-vercel-forwarded-for", "x-real-ip", "x-forwarded-for"],
+    },
   },
   trustedOrigins: authOrigins.trustedOrigins,
   session: {
@@ -82,32 +86,7 @@ export const auth = betterAuth({
       maxAge: 60 * 5,
     },
   },
-  secondaryStorage: {
-    get: async (key) => {
-      const value = await redis.get(key);
-      return value ?? null;
-    },
-    set: async (key, value, ttl) => {
-      if (ttl) {
-        await redis.set(key, value, "EX", ttl);
-      } else {
-        await redis.set(key, value);
-      }
-    },
-    delete: async (key) => {
-      await redis.del(key);
-    },
-    getAndDelete: async (key) => {
-      const value = await redis.get(key);
-      if (value) {
-        await redis.del(key);
-      }
-      return value ?? null;
-    },
-    increment: async (key, amount) => {
-      return await redis.incrby(key, amount ?? 1);
-    },
-  },
+  secondaryStorage: createSecondaryStorage(redis),
   socialProviders: {
     google: {
       clientId: googleClientId,
