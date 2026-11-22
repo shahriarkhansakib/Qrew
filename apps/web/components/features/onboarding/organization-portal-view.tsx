@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QrewLogo } from "@/components/ui/logo";
 import { authClient } from "@/lib/auth-client";
+import { apiUrl } from "@/lib/constants";
 
 export function OrganizationPortalView() {
   const router = useRouter();
@@ -112,7 +113,6 @@ export function OrganizationPortalView() {
     setIsCreating(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002";
       const res = await fetch(`${apiUrl}/api/workspaces/create`, {
         method: "POST",
         headers: {

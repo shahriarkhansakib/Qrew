@@ -1,5 +1,6 @@
 import type { AppPermission } from "@starter/db/permissions-registry";
 import { create } from "zustand";
+import { apiUrl } from "@/lib/constants";
 
 interface PermissionState {
   permissions: string[];
@@ -28,7 +29,6 @@ export const usePermissionStore = create<PermissionState>((set, get) => ({
 
   loadPermissions: async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const res = await fetch(`${apiUrl}/api/workspaces/permissions/me`, {
         // Essential: send the session cookie so Hono knows who is asking
         credentials: "include",

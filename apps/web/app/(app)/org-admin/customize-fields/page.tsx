@@ -305,7 +305,7 @@ export default function CustomizeFieldsPage() {
     },
   });
 
-  const { data: orgSettings, isLoading: loadingSettings } = useQuery({
+  const { data: orgSettings, isLoading: _loadingSettings } = useQuery({
     queryKey: ["org-settings"],
     queryFn: async () => {
       const res = await fetch(`${apiUrl}/api/workspaces/settings`, { credentials: "include" });

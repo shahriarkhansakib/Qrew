@@ -356,9 +356,9 @@ describe("Architecture Flaws & Synchronization Protocol Tests", () => {
       scope[`TPL_${bareKey}`] = "10.000000";
       scope[bareKey] = "10.000000";
 
-      expect(scope["TPL_DISCOUNT"]).toBe("10.000000");
-      expect(scope["DISCOUNT"]).toBe("10.000000");
-      expect(scope["TPL_TPL_DISCOUNT"]).toBeUndefined();
+      expect(scope.TPL_DISCOUNT).toBe("10.000000");
+      expect(scope.DISCOUNT).toBe("10.000000");
+      expect(scope.TPL_TPL_DISCOUNT).toBeUndefined();
     });
   });
 });

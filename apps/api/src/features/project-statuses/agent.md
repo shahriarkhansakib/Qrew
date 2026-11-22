@@ -2,13 +2,14 @@
 
 **Location**: `apps/api/src/features/project-statuses/agent.md`  
 **Status**: Active / Production Binding Contract  
-**Version**: 1.0.0  
+**Version**: 1.0.0
 
 This document defines the backend architectural invariants, API contracts, database schemas, and transition security guarantees for project statuses and workflow DAG orchestration.
 
 ---
 
 ## 1. Core Responsibilities
+
 - **Owns**:
   - `projectStatusesRoute` (`project-statuses.route.ts`): CRUD operations for stages, grid layout updates, atomic node swaps, transition management, and stage field assignments.
   - `computeLayoutSeed` (`layout-seeder.ts`): Graph topological layout seeder for auto-populating Cartesian grid coordinates (`gridColumn`, `gridRow`).
@@ -18,6 +19,7 @@ This document defines the backend architectural invariants, API contracts, datab
 ---
 
 ## 2. Invariants & Non-Negotiable Rules
+
 1. **Dynamic Terminal & Sink Invariant**:
    - Terminal stages are dynamically deduced by having zero outgoing transitions (`out-degree = 0`). The system completed stage (`name === "Completed"`) is strictly forbidden from having outbound transitions (`400`).
 2. **Atomic Grid Coordinate Swapping**:
@@ -35,6 +37,7 @@ This document defines the backend architectural invariants, API contracts, datab
 ---
 
 ## 3. Data Model & Schema Mapping
+
 - `projectStatuses`:
   - `id`: UUID primary key.
   - `organizationId`: Multi-tenant isolation scope.
@@ -63,12 +66,14 @@ This document defines the backend architectural invariants, API contracts, datab
 ---
 
 ## 4. Security & PBAC Permissions
+
 - All modification endpoints (`POST /`, `PATCH /:id`, `PATCH /:id/position`, `POST /:id/swap`, `DELETE /:id`, `PUT /:id/transitions`, `PUT /:id/fields`) enforce `requireOrgPermission("workflow:manage")`.
 - Reading workflow stages (`GET /`) enforces `requireOrgPermission("file:view")`.
 
 ---
 
 ## 5. Error States & Codes
+
 - `400 Bad Request`: Stage name collision, self-loop transition, or outbound transitions on terminal node.
 - `403 Forbidden`: Renaming or deleting system status, or deleting initial-to-completed transition edge.
 - `404 Not Found`: Stage or target status does not exist within the organization.

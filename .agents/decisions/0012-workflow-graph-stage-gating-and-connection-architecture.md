@@ -9,7 +9,6 @@
 ## 1. Context & Problem Statement
 
 The Workflow Studio enables organizations to define custom operational pipelines (directed state machine graphs) for projects and files. During sprint verification, two core architectural requirements and one critical usability bug were identified:
-
 1. **Terminal Stage Semantic Invariant**:
    - The purpose, mechanisms, and database constraints governing the "Terminal stage" toggle needed formal architectural documentation to prevent invalid transitions and undefined lifecycle states.
 2. **Transition & Role-Gating Mechanism**:
@@ -23,6 +22,7 @@ The Workflow Studio enables organizations to define custom operational pipelines
 ## 2. Decision & Architecture
 
 ### 2.1 Terminal Stage Semantics & Invariants
+
 - **Sink Node Definition**: A terminal stage (`isTerminal: true`) represents an end-state milestone (e.g. `Completed`, `Archived`, `Cancelled`).
 - **Zero-Outbound Invariant**: Terminal stages cannot possess outgoing transitions.
   - **Frontend Enforcement**: In `AddStageModal` and `EditStageModal`, toggling "Terminal stage" automatically wipes and disables outgoing transition selections (`setTransitions([])`).
@@ -31,6 +31,7 @@ The Workflow Studio enables organizations to define custom operational pipelines
   - In Kanban and Project Details views, projects at a terminal stage do not display "Advance Stage" actions; they render immutable badges (`Workflow Finished` / `Workflow Closed`).
 
 ### 2.2 Transitions & Role-Gating Architecture
+
 - **Directed Edge Model**: Workflow edges are stored in `project_status_transitions`:
   - `fromStatusId`: Source stage UUID.
   - `toStatusId`: Target stage UUID.
@@ -45,6 +46,7 @@ The Workflow Studio enables organizations to define custom operational pipelines
   - The direct edge between the initial stage (`isInitial: true`) and the default system completed stage (`isSystem: true`) cannot be severed (`403 Forbidden`).
 
 ### 2.3 Interactive Connection Engine & Click Gating (`workflow-graph.tsx`)
+
 - **Direct Container Click Handler**: The outer `<div className="group cursor-pointer select-none">` of `WorkflowNodeCircle` now directly receives `onClick={handleClick}`.
 - **Drag-vs-Click Threshold Detection**:
   - Repositioning nodes on the Cartesian grid uses pointer capture.
@@ -60,10 +62,12 @@ The Workflow Studio enables organizations to define custom operational pipelines
 ## 3. Consequences
 
 ### Positive
+
 - Fully functional, intuitive visual edge creation directly on the canvas without opening modals.
 - Eliminates accidental modal launches when dragging nodes across grid coordinates.
 - Prevents invalid graph topologies (terminal stages with outbound edges; initial-to-completed bridge deletion).
 - Enforces strict role-gating PBAC across project workflows without breaking existing transitions.
 
 ### Negative / Tradeoffs
+
 - Rapid clicking immediately following a drag must wait for pointer release to clear the drag threshold ref.

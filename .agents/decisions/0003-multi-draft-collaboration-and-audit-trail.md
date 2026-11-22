@@ -20,17 +20,21 @@ A full-fledged event-sourcing or row-level audit table was deemed unnecessarily 
 We removed the single-draft restriction and introduced multi-draft collaboration backed by an embedded, lightweight JSONB audit trail (`editHistory`).
 
 ### 1. Unlimited Project Drafts
-* Projects can have any number of drafts created by any team member with `finance:manage_invoices` permissions.
-* The draft table constraint is keyed by `id` (primary key).
-* Each draft explicitly preserves the creator's identity (`userId`) for lifecycle attribution.
+
+- Projects can have any number of drafts created by any team member with `finance:manage_invoices` permissions.
+- The draft table constraint is keyed by `id` (primary key).
+- Each draft explicitly preserves the creator's identity (`userId`) for lifecycle attribution.
 
 ### 2. Organization-Wide Shared Editing
-* Any user in the organization holding the `finance:manage_invoices` permission can view and edit any active draft within that organization.
-* Multi-tenant scoping (`eq(invoiceDrafts.organizationId, orgId)`) is enforced unconditionally on all draft CRUD operations.
+
+- Any user in the organization holding the `finance:manage_invoices` permission can view and edit any active draft within that organization.
+- Multi-tenant scoping (`eq(invoiceDrafts.organizationId, orgId)`) is enforced unconditionally on all draft CRUD operations.
 
 ### 3. Lightweight JSONB Audit Trail (`editHistory`)
-* Stored directly inside `invoice_drafts.editHistory` (`DraftEditAuditEntry[]`).
-* Structure:
+
+- Stored directly inside `invoice_drafts.editHistory` (`DraftEditAuditEntry[]`).
+- Structure:
+
   ```typescript
   export interface DraftEditAuditEntry {
     userId: string;
@@ -39,14 +43,14 @@ We removed the single-draft restriction and introduced multi-draft collaboration
     timestamp: string;   // ISO 8601 string
   }
   ```
-* **Coalescing Rule**: Consecutive edits by the same user within 2 minutes coalesce into a single entry to prevent database bloat from rapid autosaves or iterative keystrokes.
-* **Storage Cap**: The audit array is capped at the 50 most recent entries per draft to ensure constant-size payload serialization.
+- **Coalescing Rule**: Consecutive edits by the same user within 2 minutes coalesce into a single entry to prevent database bloat from rapid autosaves or iterative keystrokes.
+- **Storage Cap**: The audit array is capped at the 50 most recent entries per draft to ensure constant-size payload serialization.
 
 ---
 
 ## Consequences
 
-* **Positive**:
-  * Unlocks realistic agency workflows where billing teams draft multiple invoice scenarios for a client.
-  * Clear accountability: creators and subsequent editors are visibly identified.
-  * Zero overhead: no secondary database table joins or complex migrations required.
+- **Positive**:
+  - Unlocks realistic agency workflows where billing teams draft multiple invoice scenarios for a client.
+  - Clear accountability: creators and subsequent editors are visibly identified.
+  - Zero overhead: no secondary database table joins or complex migrations required.

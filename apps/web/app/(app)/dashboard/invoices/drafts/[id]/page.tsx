@@ -7,25 +7,16 @@ import {
   AlertTriangle,
   ArrowLeft,
   BookmarkPlus,
-  Calendar,
-  Check,
   CheckCircle,
   Clock,
-  Columns2,
   ExternalLink,
-  Eye,
-  EyeOff,
-  History,
-  Layers,
   Loader2,
   PanelRightClose,
   PanelRightOpen,
-  Pencil,
   Printer,
   RefreshCw,
   RotateCcw,
   Trash2,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -710,7 +701,10 @@ export default function DraftBuilderPage() {
                       .slice()
                       .reverse()
                       .map((entry: any, idx: number) => (
-                        <div key={idx} className="flex flex-col gap-0.5 text-xs pt-2 first:pt-0">
+                        <div
+                          key={entry.id || entry.editedAt || `entry-${idx}`}
+                          className="flex flex-col gap-0.5 text-xs pt-2 first:pt-0"
+                        >
                           <div className="flex items-center justify-between gap-1">
                             <span className="font-medium text-foreground truncate max-w-[160px]">
                               {entry.userName || entry.userEmail || "Team Member"}
@@ -921,7 +915,7 @@ export default function DraftBuilderPage() {
                       body: JSON.stringify({ orderedIds }),
                     },
                   );
-                } catch (err) {
+                } catch (_err) {
                   queryClient.invalidateQueries({ queryKey: ["draft-sections", draftId] });
                   toast.error("Failed to reorder rows");
                 }

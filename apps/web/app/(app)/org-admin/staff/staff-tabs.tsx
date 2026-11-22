@@ -6,13 +6,12 @@ import { Can } from "@/components/features/auth/can";
 import { InvitationsDataTable } from "@/components/features/staff/invitations-data-table";
 import { StaffDataTable } from "@/components/features/staff/staff-data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { apiUrl } from "@/lib/constants";
 
 export function StaffTabs() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentTab = searchParams.get("tab") || "active";
-
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002";
 
   // Fetch pending invites just for the badge count (React Query automatically dedupes this!)
   const { data: invitations = [] } = useQuery({
@@ -41,7 +40,7 @@ export function StaffTabs() {
           Active Staff
         </TabsTrigger>
 
-        <Can I="staff:invite" fallback={<></>}>
+        <Can I="staff:invite" fallback={null}>
           <TabsTrigger
             value="pending"
             className="flex-none w-auto rounded-md data-[state=active]:bg-muted px-4 py-1.5 transition-colors hover:bg-muted/50 data-[state=active]:shadow-none data-[state=active]:text-foreground text-muted-foreground font-medium text-sm flex items-center gap-2"
@@ -66,7 +65,7 @@ export function StaffTabs() {
         </div>
       </TabsContent>
 
-      <Can I="staff:invite" fallback={<></>}>
+      <Can I="staff:invite" fallback={null}>
         <TabsContent
           value="pending"
           className="mt-0 focus-visible:outline-none focus-visible:ring-0"

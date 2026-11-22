@@ -2,13 +2,14 @@
 
 **Location**: `apps/web/components/features/workflows/agent.md`  
 **Status**: Active / Production Binding Contract  
-**Version**: 1.0.0  
+**Version**: 1.0.0
 
 This document serves as the architectural contract for the interactive Workflow Studio, visual workflow graph, stage creation/editing modals, and transition role-gating interface. Any modifications to files in this directory must strictly respect the invariants defined herein.
 
 ---
 
 ## 1. Core Responsibilities
+
 - **Owns**:
   - `WorkflowBuilder` (`workflow-builder.tsx`): Main canvas orchestrating status nodes, layout controls, undo/redo state stacks, and action mutations.
   - `WorkflowGraph` (`workflow-graph.tsx`): Interactive 2D coordinate grid, draggable SVG nodes (`WorkflowNodeCircle`), Bezier curves (`edgePath`), arrow markers, and connection mode engine.
@@ -20,6 +21,7 @@ This document serves as the architectural contract for the interactive Workflow 
 ---
 
 ## 2. Invariants & Non-Negotiable Rules
+
 1. **Interactive Node Click Gating**:
    - Every `WorkflowNodeCircle` container must be directly clickable in both Normal Mode (to open the edit modal) and Connect Mode (to select source and target stages).
    - Drag moves must be distinguished from clicks using pointer drag delta thresholds (`Math.hypot(deltaX, deltaY) > 5`). Repositioning a node on the grid must never trigger the edit modal.
@@ -44,6 +46,7 @@ This document serves as the architectural contract for the interactive Workflow 
 ---
 
 ## 3. Data Model & Schema Mapping
+
 - `projectStatuses`:
   - `id`: UUID primary key.
   - `name`: Unique stage name within the organization.
@@ -62,12 +65,14 @@ This document serves as the architectural contract for the interactive Workflow 
 ---
 
 ## 4. Security & PBAC Permissions
+
 - **Route Guard**: All status modifications and workflow updates require `workflow:manage` permission on `@starter/api`.
 - **Runtime Transition Enforcement**: Moving projects between stages calls `PATCH /api/projects/:id/advance-status`. If `allowedRoleIds` is populated for the transition, non-owner users must hold an authorized role, or the API rejects with `403 Forbidden`.
 
 ---
 
 ## 5. Error States & Codes
+
 - `400 Bad Request`: Duplicate stage name, self-loop transition, or adding outbound transitions to a terminal stage.
 - `403 Forbidden`: Attempting to delete system/default status, or attempting to remove the immutable initial-to-completed transition edge.
 - `409 Conflict`: Grid coordinate collision or attempting to delete a stage that still has assigned projects (`Postgres 23503`).

@@ -1,13 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-if (!process.env.NEXT_PUBLIC_API_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL is not set.");
-}
-if (!process.env.NEXT_PUBLIC_APP_URL) {
-  throw new Error("NEXT_PUBLIC_APP_URL is not set.");
-}
-
 // Global App Roles (NOT Tenant Roles)
 const ROLE_HIERARCHY: Record<string, number> = {
   user: 1,
@@ -41,23 +34,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Robust Fetch Logic
-  const rawApiUrl = process.env.NEXT_PUBLIC_API_URL as string; // backend
-  const apiUrl = rawApiUrl.endsWith("/") ? rawApiUrl.slice(0, -1) : rawApiUrl;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL as string; // frontend
+  // Robust Fetch Logic (same-origin so previews, aliases, and production all hit their own API)
+  const origin = request.nextUrl.origin;
   const cookieHeader = request.headers.get("cookie") || "";
 
   let sessionData = null;
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    const res = await fetch(`${apiUrl}/api/auth/get-session`, {
+    const res = await fetch(`${origin}/api/auth/get-session`, {
       method: "GET",
       headers: {
         cookie: cookieHeader,
-        origin: appUrl,
+        origin,
         accept: "application/json",
       },
       cache: "no-store",

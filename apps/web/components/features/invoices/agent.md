@@ -1,4 +1,5 @@
 # INVOICE ENGINE — FRONTEND AGENT CONSTITUTION
+
 **Location:** `apps/web/components/features/invoices/AGENT.md`
 **Version:** 1.0 | **Status:** Binding Architectural Contract
 **Read every section before writing a single line of code. No exceptions.**
@@ -115,43 +116,43 @@ All query keys live in `components/features/invoices/shared/invoice-keys.ts`. Ne
 export const invoiceKeys = {
   // Org Configs
   orgConfigs: {
-    all: (orgId: string) => ['org-configs', orgId] as const,
+    all: (orgId: string) => ["org-configs", orgId] as const,
   },
 
   // PDF Layout
   pdfLayout: {
-    byOrg: (orgId: string) => ['pdf-layout', orgId] as const,
+    byOrg: (orgId: string) => ["pdf-layout", orgId] as const,
   },
 
   // Templates
   templates: {
-    list: (orgId: string, scope?: string) => ['invoice-templates', 'list', orgId, scope] as const,
-    detail: (id: string) => ['invoice-templates', 'detail', id] as const,
-    rows: (templateId: string) => ['invoice-templates', 'rows', templateId] as const,
+    list: (orgId: string, scope?: string) => ["invoice-templates", "list", orgId, scope] as const,
+    detail: (id: string) => ["invoice-templates", "detail", id] as const,
+    rows: (templateId: string) => ["invoice-templates", "rows", templateId] as const,
   },
 
   // Tokens
   tokens: {
     byContext: (projectId: string, templateId?: string) =>
-      ['invoice-tokens', projectId, templateId] as const,
+      ["invoice-tokens", projectId, templateId] as const,
   },
 
   // Preview (do NOT cache aggressively — always fresh)
   preview: {
-    byDraft: (projectId: string) => ['invoice-preview', projectId] as const,
+    byDraft: (projectId: string) => ["invoice-preview", projectId] as const,
   },
 
   // Drafts
   drafts: {
-    byProject: (projectId: string) => ['invoice-drafts', 'project', projectId] as const,
+    byProject: (projectId: string) => ["invoice-drafts", "project", projectId] as const,
   },
 
   // Invoices
   invoices: {
-    list: (projectId: string) => ['invoices', 'list', projectId] as const,
-    detail: (id: string) => ['invoices', 'detail', id] as const,
+    list: (projectId: string) => ["invoices", "list", projectId] as const,
+    detail: (id: string) => ["invoices", "detail", id] as const,
   },
-}
+};
 ```
 
 ---
@@ -169,9 +170,9 @@ All API calls use the existing project pattern. Create a dedicated client file:
 // Pattern example:
 export async function getInvoiceTokens(projectId: string, templateId?: string) {
   const res = await apiClient.get(`/api/invoices/tokens`, {
-    params: { projectId, templateId }
-  })
-  return res.data as TokenDiscoveryResult
+    params: { projectId, templateId },
+  });
+  return res.data as TokenDiscoveryResult;
 }
 ```
 
@@ -332,10 +333,10 @@ A dropdown that appears next to formula inputs. Inserts the selected token at th
 
 ```typescript
 interface TokenInjectorProps {
-  inputRef: React.RefObject<HTMLInputElement | HTMLTextAreaElement>
-  projectId?: string     // for context-aware token list
-  templateId?: string    // to include ROW_* and SECTION_* tokens
-  mode: 'formula' | 'text'
+  inputRef: React.RefObject<HTMLInputElement | HTMLTextAreaElement>;
+  projectId?: string; // for context-aware token list
+  templateId?: string; // to include ROW_* and SECTION_* tokens
+  mode: "formula" | "text";
   // formula mode: inserts {{TOKEN}} for formulas
   // text mode: inserts {{$TOKEN}} for value interpolation in labels
 }
@@ -369,26 +370,24 @@ Dropdown structure (grouped):
 
 **Cursor position insertion logic:**
 ```typescript
-function insertAtCursor(
-  ref: React.RefObject<HTMLInputElement>,
-  token: string
-): void {
-  const input = ref.current
-  if (!input) return
-  const start = input.selectionStart ?? input.value.length
-  const end = input.selectionEnd ?? input.value.length
-  const newValue = input.value.slice(0, start) + token + input.value.slice(end)
+function insertAtCursor(ref: React.RefObject<HTMLInputElement>, token: string): void {
+  const input = ref.current;
+  if (!input) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  const newValue = input.value.slice(0, start) + token + input.value.slice(end);
   // Trigger React onChange manually (input.value setter + dispatchEvent)
   const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype, 'value'
-  )!.set
-  nativeInputValueSetter!.call(input, newValue)
-  input.dispatchEvent(new Event('input', { bubbles: true }))
+    window.HTMLInputElement.prototype,
+    "value",
+  )!.set;
+  nativeInputValueSetter!.call(input, newValue);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
   // Restore cursor after token
   requestAnimationFrame(() => {
-    input.setSelectionRange(start + token.length, start + token.length)
-    input.focus()
-  })
+    input.setSelectionRange(start + token.length, start + token.length);
+    input.focus();
+  });
 }
 ```
 
@@ -401,9 +400,9 @@ The preview panel calls `POST /api/invoices/preview` with a debounce of 300ms wh
 
 ```typescript
 interface PreviewPanelProps {
-  templateId: string
-  testProjectId: string | null    // set by the admin in the preview bar
-  onTestProjectChange: (id: string) => void
+  templateId: string;
+  testProjectId: string | null; // set by the admin in the preview bar
+  onTestProjectChange: (id: string) => void;
 }
 ```
 
@@ -472,7 +471,6 @@ Once selected: creates a draft via `PUT /api/invoices/drafts` and transitions to
 ### 6.3 Header Fields Panel (`HeaderFieldsPanel.tsx`)
 
 Renders the invoice header configuration defined by `template_header_fields`.
-
 - `file_field` type: shows the resolved value (read-only, pulled from project data)
 - `org_constant` type: shows the constant value (read-only, labeled as "Organization Default")
 - `manual` type: shows an editable input field with the placeholder text
@@ -513,12 +511,11 @@ Every mutation to the draft state triggers an auto-save:
 ```typescript
 // Debounced auto-save — 800ms after last change
 const draftMutation = useMutation({
-  mutationFn: (draft: DraftPayload) =>
-    invoiceApi.upsertDraft(draft),
+  mutationFn: (draft: DraftPayload) => invoiceApi.upsertDraft(draft),
   onSuccess: () => {
-    setLastSavedAt(new Date())
-  }
-})
+    setLastSavedAt(new Date());
+  },
+});
 
 // UI indicator: "Auto-saved 2s ago" or "Saving..." or "⚠ Save failed — retry"
 ```
@@ -678,14 +675,14 @@ const mutation = useMutation({
   mutationFn: invoiceApi.someFunction,
   onSuccess: (data) => {
     // ALWAYS invalidate relevant queries after mutations
-    queryClient.invalidateQueries({ queryKey: invoiceKeys.templates.list(orgId) })
+    queryClient.invalidateQueries({ queryKey: invoiceKeys.templates.list(orgId) });
     // Optimistic updates for UX (e.g., reordering) use queryClient.setQueryData
   },
   onError: (error) => {
     // ALWAYS show a toast on error
-    toast.error(extractErrorMessage(error))
-  }
-})
+    toast.error(extractErrorMessage(error));
+  },
+});
 ```
 
 ### 9.2 Drag-and-Drop with dnd-kit
@@ -710,16 +707,25 @@ All forms use `react-hook-form` with `zod` resolvers. Zod schemas mirror the bac
 ```typescript
 // Example: Row creation form schema
 const createRowSchema = z.object({
-  rowToken: z.string()
+  rowToken: z
+    .string()
     .min(1)
     .max(50)
-    .regex(/^[A-Z][A-Z0-9_]*$/, 'Must be UPPER_SNAKE_CASE'),
-  rowType: z.enum(['formula', 'constant', 'manual', 'section_aggregate', 'multi_value', 'header_label', 'grand_total']),
+    .regex(/^[A-Z][A-Z0-9_]*$/, "Must be UPPER_SNAKE_CASE"),
+  rowType: z.enum([
+    "formula",
+    "constant",
+    "manual",
+    "section_aggregate",
+    "multi_value",
+    "header_label",
+    "grand_total",
+  ]),
   label: z.string().min(1).max(200),
   subDescription: z.string().max(500).optional(),
   formulaRaw: z.string().max(1000).optional(),
   // ... etc
-})
+});
 ```
 
 ---
@@ -780,20 +786,22 @@ stateDiagram-v2
 ```
 
 ### 12.2 Multi-Draft Collaboration UI Guidelines
+
 1. **Multiple Concurrent Drafts**: Users can create unlimited drafts per project without overwriting each other.
 2. **Creator Attribution & Audit Popover**:
    - The Drafts table displays a **Created By** column with user attribution and creation date.
    - The Draft Builder header displays creator name, creation date, and an interactive **History** Popover.
    - The Popover displays the chronological list of edits from `draft.editHistory` (author, action, formatted date/time).
 3. **Status Badges & Row Actions**:
-   - `draft`: Muted badge with `Clock` icon. Action: *Edit Draft*, *Delete Draft*.
-   - `frozen` (*Ready to Bill*): Blue badge with `CheckCircle2` icon. Actions: *View*, *Mark as Issued*, *Mark as Paid*, *Revert to Draft*, *Void Invoice*.
-   - `issued`: Indigo badge with `Receipt` icon. Actions: *View*, *Mark as Paid*, *Mark as Disputed*, *Revert to Draft (Correct)*, *Void Invoice*.
-   - `disputed`: Amber badge with `AlertCircle` icon. Actions: *View*, *Resolve Dispute (Re-Issue)*, *Mark as Paid*, *Revert to Draft (Correct)*, *Void Invoice*.
-   - `paid`: Primary badge with `CheckCircle2` icon. Actions: *View*, *Void Invoice*.
+   - `draft`: Muted badge with `Clock` icon. Action: _Edit Draft_, _Delete Draft_.
+   - `frozen` (_Ready to Bill_): Blue badge with `CheckCircle2` icon. Actions: _View_, _Mark as Issued_, _Mark as Paid_, _Revert to Draft_, _Void Invoice_.
+   - `issued`: Indigo badge with `Receipt` icon. Actions: _View_, _Mark as Paid_, _Mark as Disputed_, _Revert to Draft (Correct)_, _Void Invoice_.
+   - `disputed`: Amber badge with `AlertCircle` icon. Actions: _View_, _Resolve Dispute (Re-Issue)_, _Mark as Paid_, _Revert to Draft (Correct)_, _Void Invoice_.
+   - `paid`: Primary badge with `CheckCircle2` icon. Actions: _View_, _Void Invoice_.
    - `void`: Red badge with `AlertCircle` icon. Read-only terminal state.
 
 ### 12.3 Optional Period Billing & Project Hub Resumption
+
 1. **Billing Scope Toggle (`generate-invoice-modal.tsx`)**:
    - Explicit radio choice:
      - **Full Project Timeline (Dynamic Live Sync)** (Default): `periodStart = null`, `periodEnd = null`. Live token resolution updates draft computations dynamically as new expenses are logged.
@@ -808,8 +816,9 @@ stateDiagram-v2
 ## 13. Prebuilt Optional Service Rows & Granular PBAC Architecture
 
 ### 13.1 Prebuilt Optional Service Rows UI Flow
+
 1. **Master Template Builder (`TemplateOptionalRowsModal`)**:
-   - Master template architects define standard add-on service items (e.g. *Crane Rental*, *Vessel Fumigation*) in `/org-admin/invoice-templates/:id` via the "Optional Services" header button.
+   - Master template architects define standard add-on service items (e.g. _Crane Rental_, _Vessel Fumigation_) in `/org-admin/invoice-templates/:id` via the "Optional Services" header button.
    - Defines default token (`CRANE_RENTAL`), label, default rate, and description.
 2. **Draft Service Picker (`AddOptionalServiceModal`)**:
    - In draft fill/edit mode, authorized staff click **"+ Add Service"** in the header.
@@ -821,6 +830,7 @@ stateDiagram-v2
    - If the user has `finance:manage_invoices` or `invoice:author_formulas`, the draft page displays an **"Edit Master Template"** link leading directly to `/org-admin/invoice-templates/:id`.
 
 ### 13.2 Granular PBAC Frontend Gating
+
 1. **Tier 1 (Architect / Admin)**:
    - Permitted: Formula authoring, template editing, optional services catalog management.
 2. **Tier 2 (Accountant / Staff)**:
@@ -833,13 +843,12 @@ stateDiagram-v2
    - Formula authoring is locked.
    - Manual numeric values and prebuilt service attachment remain enabled.
 
-
-
 ---
 
 ## 14. Multi-Permission PBAC Navigation, Direct Invoice Generation, & General Template Drafts
 
 ### 14.1 Multi-Permission Navigation & Dual Placement
+
 - Navigation items evaluate permission arrays via `canAny(...)`:
   - `permission: ["invoice:view", "finance:view_invoices", "finance:manage_invoices"]`.
 - The "Invoices" page is registered and accessible in both:
@@ -847,6 +856,7 @@ stateDiagram-v2
   2. The Tenant Admin sidebar (`/org-admin`), eliminating unnecessary back-and-forth navigation.
 
 ### 14.2 Direct Invoice Generation Flow
+
 - Invoices can be generated directly from:
   1. Top-bar **`[ Generate Invoice ]`** in the template builder (`/org-admin/invoice-templates/[id]`).
   2. Row action **`[ Generate Invoice ]`** in the template catalog (`/org-admin/invoice-templates`).
@@ -854,6 +864,7 @@ stateDiagram-v2
 - `GenerateInvoiceModal` supports both pre-scoped project contexts and global creation by rendering an active Project Selector dropdown (`/api/workspaces/projects?status=active`).
 
 ### 14.3 General Template Draft Workspace Routing
+
 - When loading a draft at `/dashboard/invoices/drafts/[id]`, the page detects if `sourceTemplate.templateType === "general"` or if custom `columnDefinitions` exist.
 - If general: the page dynamically mounts `SheetBuilderWorkspace`, hydrating all custom row `cellValues`, vertical auto-sums, and dynamic grand totals.
 - If standard: the page mounts `TemplateBuilderWorkspace` with standard 4-column layout and two-column USD calculation.

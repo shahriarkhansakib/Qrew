@@ -94,8 +94,8 @@ export function useTwoFactor() {
       return;
     }
 
-    if (method === "authenticator" && data?.totpURI) {
-      setQrCodeData(data?.totpURI);
+    if (method === "authenticator" && data && "totpURI" in data && data.totpURI) {
+      setQrCodeData(data.totpURI);
       setStep("qr");
     } else if (method === "email") {
       toast.success("A verification code has been sent to your email.");

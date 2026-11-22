@@ -17,7 +17,7 @@ const { makeChain } = vi.hoisted(() => {
 });
 
 // ─── Mock @starter/db BEFORE importing the controller ────────────────────────
-const { makeSelectChain } = vi.hoisted(() => {
+const { makeSelectChain: _makeSelectChain } = vi.hoisted(() => {
   return {
     makeSelectChain: (result = [{ id: "id" }]) => {
       const p = Promise.resolve(result) as any;

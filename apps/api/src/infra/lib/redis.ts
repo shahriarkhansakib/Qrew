@@ -5,8 +5,8 @@ import { logger } from "./logger";
 const redisLog = logger.child({ module: "redis" });
 
 const redisUrl = process.env.REDIS_URL;
-const upstashUrl = process.env.UPSTASH_URL;
-const upstashToken = process.env.UPSTASH_TOKEN;
+const upstashUrl = process.env.UPSTASH_URL || process.env.UPSTASH_REDIS_REST_URL;
+const upstashToken = process.env.UPSTASH_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
 // Determine which client to use:
 // 1. Upstash if explicit Upstash REST credentials exist
@@ -26,6 +26,7 @@ const prodRedis = hasUpstash
   ? new UpstashRedis({
       url: upstashUrl!,
       token: upstashToken!,
+      automaticDeserialization: false,
     })
   : null;
 
@@ -103,6 +104,15 @@ export const redis = {
       return 1;
     }
   },
+  incrby: async (key: string, amount: number = 1): Promise<number> => {
+    try {
+      if (hasUpstash) return await prodRedis!.incrby(key, amount);
+      if (hasIoredis) return await localRedis!.incrby(key, amount);
+      return amount;
+    } catch {
+      return amount;
+    }
+  },
   expire: async (key: string, ttl: number): Promise<number> => {
     try {
       if (hasUpstash) return await prodRedis!.expire(key, ttl);
@@ -110,6 +120,15 @@ export const redis = {
       return 1;
     } catch {
       return 1;
+    }
+  },
+  ttl: async (key: string): Promise<number> => {
+    try {
+      if (hasUpstash) return await prodRedis!.ttl(key);
+      if (hasIoredis) return await localRedis!.ttl(key);
+      return -2;
+    } catch {
+      return -2;
     }
   },
   smembers: async (key: string): Promise<string[]> => {

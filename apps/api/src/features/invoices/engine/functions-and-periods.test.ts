@@ -351,14 +351,11 @@ describe("Track C — AST Math Functions & Period-Aware Expenses", () => {
       ];
 
       const dag = DagValidatorService.validate(sections);
-      const { evaluatedSections, errors, notices } = AstEvaluatorService.evaluate(
-        sections,
-        {},
-        {},
-        {},
-        {},
-        dag.topologicalOrder,
-      );
+      const {
+        evaluatedSections,
+        errors,
+        notices: _notices,
+      } = AstEvaluatorService.evaluate(sections, {}, {}, {}, {}, dag.topologicalOrder);
 
       // 100 / 0 safely evaluates to non-fatal 0.000000 fallback
       expect(errors).toHaveLength(0);

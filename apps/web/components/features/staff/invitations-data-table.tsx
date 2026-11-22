@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { apiUrl } from "@/lib/constants";
 
 interface Invitation {
   id: string;
@@ -36,7 +37,6 @@ interface Invitation {
 }
 
 export function InvitationsDataTable() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5002";
   const _router = useRouter();
 
   const [revokingInvite, setRevokingInvite] = useState<Invitation | null>(null);

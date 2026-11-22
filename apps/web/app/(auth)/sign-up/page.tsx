@@ -69,11 +69,16 @@ export default function SignUpPage() {
     setLoadingType("google");
     setGlobalError(null);
 
-    // Explicitly construct the absolute URL to force the backend to redirect to port 5002
-    await signIn.social({
+    // Construct an explicit same-origin callbackURL for the active deployment host
+    const { error } = await signIn.social({
       provider: "google",
       callbackURL: `${window.location.origin}/sign-in`,
     });
+
+    if (error) {
+      setGlobalError(error.message || "Google sign-up failed. Please try again.");
+      setLoadingType(null);
+    }
   };
 
   const isFormDisabled = loadingType !== null;

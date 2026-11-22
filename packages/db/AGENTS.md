@@ -42,6 +42,7 @@ erDiagram
 ```
 
 ### Key Invariants:
+
 1. **Immutable Historical Snapshots**:
    - When finalized into `invoices`, `historicalFormat` and `resolvedHeaderValues` capture the exact state at freeze time.
    - Line items in `invoice_line_items` store evaluated values as `numeric(20, 6)` strings.
@@ -55,6 +56,7 @@ erDiagram
 ---
 
 ## 3. Custom Fields (4-Category System)
+
 - **Category 1**: Configurable System Fields (`isDetailed`, `isSensitive`, `isPrivate`).
 - **Category 2**: Custom Fields (`custom_field_definitions` + JSONB).
 - **Category 3**: Immutable Auto-Metadata (`createdAt`, `updatedAt`).

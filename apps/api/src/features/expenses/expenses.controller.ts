@@ -36,7 +36,7 @@ export async function createExpense(c: Context) {
     return c.json({ error: "Invalid data", details: parsed.error.format() }, 400);
   }
 
-  let newExpense;
+  let newExpense: any;
 
   // We must do this in a transaction: 1. Create expense, 2. Add debit to wallet
   await db.transaction(async (tx) => {

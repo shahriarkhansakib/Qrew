@@ -9,7 +9,6 @@
 ## 1. Context & Problem Statement
 
 As the platform expanded from standard project-bound maritime formula invoicing into broader general-purpose business invoicing, several architectural constraints and usability flaws surfaced:
-
 1. **Fixed-Column Table Structure**: Standard templates enforce a rigid 4-column layout (`SL | Description | USD1 | USD2`). Non-maritime expenses, general procurement, consulting services, and multi-currency billing require dynamic, customizable columns (e.g. `Department`, `Quantity`, `Unit Rate`, `Tax Code`, `Currency`).
 2. **Arbitrary UUID Row Tokens**: Rows previously generated arbitrary 8-character hex UUID tokens (e.g., `ROW_AAA69AA3`). This produced unfriendly, non-human-readable formula tokens that failed to communicate visual line item sequence.
 3. **Screen Space & Sidebar Overlap**: Dense multi-column general tables caused sidebars to compress the document into unreadable slivers. Previous automatic screen-ratio heuristics (such as 4:1) triggered jarring layout shifts and line-item truncation.
@@ -21,6 +20,7 @@ As the platform expanded from standard project-bound maritime formula invoicing 
 ## 2. Decision & Architecture
 
 ### 2.1 Archetype Rename & General Sheet Template Architecture
+
 - **Canonical Naming**: Renamed template type `"sheet"` to canonical `"general"` across database schemas, Drizzle models, Hono controllers, and frontend builders (with legacy backward compatibility for `"sheet"`).
 - **Dynamic Columns (`columnDefinitions`)**:
   - General templates store an array of `TemplateColumnDefinition` objects in `invoice_templates.columnDefinitions` (JSONB).
@@ -30,6 +30,7 @@ As the platform expanded from standard project-bound maritime formula invoicing 
   - `SheetGrandTotal` computes live vertical column sums across all sections using evaluated BigNumber arithmetic.
 
 ### 2.2 Serial-Based Row Token Naming & Two-Phase Resequencing Engine
+
 - **Sequential Token Convention**: Row tokens are named canonically after their global topological index: `ROW_1`, `ROW_2`, `ROW_3`, ...
 - **Topological Ordering**: Ordered strictly by `sections.sortOrder ASC, rows.sortOrder ASC`.
 - **Two-Phase Update Transaction (`resequenceTemplateRowTokens`)**:
@@ -38,6 +39,7 @@ As the platform expanded from standard project-bound maritime formula invoicing 
 - **Formula Immutability**: Database formulas are stored with immutable UUID tags (`{{$tok:UUID}}`). Resequencing row tokens dynamically updates display formulas without corrupting calculation graphs.
 
 ### 2.3 Explicit Studio Sidebar Modes: Overlay vs. Static
+
 - Replaced automatic ratio clamping with user-controlled display modes:
   1. **Overlay Mode (`"overlay"`)**: The table occupies 100% of the builder page; the Studio sidebar floats above the document with shadow elevation and backdrop blur.
   2. **Static Mode (`"static"`)**: The table and sidebar sit side-by-side in flex layout; the table compresses smoothly without overlap, allowing simultaneous interaction.
@@ -45,11 +47,13 @@ As the platform expanded from standard project-bound maritime formula invoicing 
 - Quick toggle controls are exposed in the top navigation bar and inside the Studio sidebar tab strip.
 
 ### 2.4 Multi-Column Additional Line Items Catalog & Table-Embedded Actions
+
 - **Dynamic Catalog Columns**: In General templates, the Additional Line Items catalog mirrors the template's configured `columnDefinitions` with horizontal scrolling.
 - **Embedded Table Row Action**: The `+ Add Line Item` button is embedded directly inside the catalog table body (as the first row when empty, or immediately beneath the last item when populated), eliminating bulky outer cards.
 - **Auto-Open on Save**: Saving or moving a row from the table to Additional Line Items automatically opens the Studio sidebar and focuses the `line-items` tab.
 
 ### 2.5 Multi-Permission PBAC Invoicing Navigation & Direct Generation
+
 - **Array-Based Nav Gates**: `navigation.ts`, `dashboard/layout.tsx`, and `org-admin/layout.tsx` evaluate permission arrays using `canAny(...)`.
 - **Sidebar Dual Placement**: "Invoices" is gated by `["invoice:view", "finance:view_invoices", "finance:manage_invoices"]` and rendered in both the User Dashboard and Tenant Admin sidebars.
 - **Direct Generation Buttons**:
@@ -64,6 +68,7 @@ As the platform expanded from standard project-bound maritime formula invoicing 
 ## 3. Consequences
 
 ### Positive
+
 - Fully general-purpose, Excel-grade multi-column table authoring seamlessly integrated into the unified AST formula engine.
 - Clean, sequential, human-friendly row tokens (`ROW_1`, `ROW_2`, ...) with zero unique constraint collisions.
 - Clear user control over workspace layout via Overlay and Static sidebar docking modes.
